@@ -77,15 +77,34 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
+      # Mirrors scripts/local-up.sh exactly. That script had drifted ahead of
+      # this job for a long time without anyone noticing — a local Postgres
+      # container keeps saw_app/saw_readonly and every 00x script applied
+      # from whenever it was first bootstrapped, so the gap was invisible
+      # until this job ran against a genuinely empty database. If you change
+      # local-up.sh's sequence, change this step to match, and vice versa.
       - name: Apply schema, RLS and seeds
         env:
           DATABASE_URL: postgres://saw_owner:ci_password@localhost:5432/school_all_ways
         run: |
-          psql "$DATABASE_URL" -f db/sql/001_extensions_and_sync.sql
+          echo "==> Bootstrap roles (needed before migrations that GRANT to saw_app)"
+          psql "$DATABASE_URL" -f db/sql/000_bootstrap_roles.sql
+          psql "$DATABASE_URL" -c "ALTER ROLE saw_app WITH PASSWORD 'ci_password'; ALTER ROLE saw_readonly WITH PASSWORD 'ci_password';"
+
+          echo "==> Drizzle migrate"
           pnpm db:migrate
-          # Re-attach after migrate so new tables (and import_batch_id) get triggers + RLS.
+
+          echo "==> Apply extensions / sync / RLS SQL"
           psql "$DATABASE_URL" -f db/sql/001_extensions_and_sync.sql
           psql "$DATABASE_URL" -f db/sql/002_rls.sql
+          psql "$DATABASE_URL" -f db/sql/003_auth_acting_user.sql
+          psql "$DATABASE_URL" -f db/sql/004_join_token_lookup.sql
+          psql "$DATABASE_URL" -f db/sql/005_public_signup.sql
+          psql "$DATABASE_URL" -f db/sql/006_platform_grants.sql
+          psql "$DATABASE_URL" -c "ALTER ROLE saw_app WITH PASSWORD 'ci_password'; ALTER ROLE saw_readonly WITH PASSWORD 'ci_password';"
+          psql "$DATABASE_URL" -c "SELECT app_apply_tenant_rls(); SELECT app_attach_sync_triggers();"
+
+          echo "==> Seed catalogues"
           pnpm db:seed
 
       # ---------------------------------------------------------------------
