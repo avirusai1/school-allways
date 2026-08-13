@@ -50,6 +50,14 @@ psql_exec < db/sql/005_public_signup.sql
 psql_exec < db/sql/006_platform_grants.sql
 psql_exec -c "ALTER ROLE saw_app WITH PASSWORD '${POSTGRES_PASSWORD}'; ALTER ROLE saw_readonly WITH PASSWORD '${POSTGRES_PASSWORD}';"
 psql_exec -c "SELECT app_apply_tenant_rls(); SELECT app_attach_sync_triggers();"
+# app_apply_tenant_rls() just re-granted UPDATE/DELETE on every tenant table,
+# including audit_logs and pii_access_logs — undoing the REVOKE that
+# 002_rls.sql placed further up (it warns about exactly this in its own
+# comment). Whenever this function is called again after 002_rls.sql, the
+# REVOKE must be re-run in the same breath, or the audit trail is silently
+# mutable by the app role. Found 2026-08-13 via a tenant-isolation test that
+# had never actually completed a run before.
+psql_exec -c "REVOKE UPDATE, DELETE ON public.audit_logs FROM saw_app; REVOKE UPDATE, DELETE ON public.pii_access_logs FROM saw_app;"
 
 echo "==> Seed catalogues + demo school"
 pnpm db:seed

@@ -49,7 +49,24 @@ SELECT gen_random_uuid(), b.tenant_id, b.id, 'ADM-001',
        CASE WHEN b.tenant_id = '$TENANT_A' THEN 'StudentOfA' ELSE 'StudentOfB' END
 FROM branches b
 WHERE b.tenant_id IN ('$TENANT_A', '$TENANT_B');
+
+-- One pre-existing audit row, needed below. DELETE's BEFORE-trigger is
+-- FOR EACH ROW — on a table with zero rows it never fires, so a delete
+-- against an empty audit_logs cannot prove the immutability guard works
+-- either way.
+INSERT INTO audit_logs (id, tenant_id, action, entity_type, entity_id)
+VALUES (gen_random_uuid(), '$TENANT_A', 'leak_test.seed', 'test', gen_random_uuid());
 SQL
+
+# Captured via the OWNER connection (unrestricted), BEFORE the attack runs.
+# The attack itself must not look this up under the attacker's own session —
+# RLS on `branches` would filter tenant B's row out of that SELECT (same
+# policy proven correct in check #2 above), so an INSERT...SELECT sourcing
+# the branch id that way finds zero rows, inserts nothing, raises no error,
+# and exits 0 — which used to read as "the attack succeeded" when in fact
+# the WITH CHECK policy on `students` was never actually reached.
+TENANT_B_BRANCH=$(psql "$DATABASE_URL" -t -A \
+  -c "SELECT id FROM branches WHERE tenant_id = '$TENANT_B' LIMIT 1;" | tail -1)
 
 query_as_tenant() {
   local tenant="$1" sql="$2"
@@ -114,8 +131,7 @@ if psql "$APP_URL" -q -t -A -v ON_ERROR_STOP=1 <<SQL >/dev/null 2>/dev/null
 BEGIN;
 SELECT set_config('app.tenant_id', '$TENANT_A', true);
 INSERT INTO students (id, tenant_id, branch_id, admission_no, first_name)
-SELECT gen_random_uuid(), '$TENANT_B', id, 'HACK-001', 'Injected'
-FROM branches WHERE tenant_id = '$TENANT_B' LIMIT 1;
+VALUES (gen_random_uuid(), '$TENANT_B', '$TENANT_B_BRANCH', 'HACK-001', 'Injected');
 COMMIT;
 SQL
 then

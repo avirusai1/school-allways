@@ -103,6 +103,8 @@ jobs:
           psql "$DATABASE_URL" -f db/sql/006_platform_grants.sql
           psql "$DATABASE_URL" -c "ALTER ROLE saw_app WITH PASSWORD 'ci_password'; ALTER ROLE saw_readonly WITH PASSWORD 'ci_password';"
           psql "$DATABASE_URL" -c "SELECT app_apply_tenant_rls(); SELECT app_attach_sync_triggers();"
+          # See scripts/local-up.sh for why this REVOKE must be repeated here.
+          psql "$DATABASE_URL" -c "REVOKE UPDATE, DELETE ON public.audit_logs FROM saw_app; REVOKE UPDATE, DELETE ON public.pii_access_logs FROM saw_app;"
 
           echo "==> Seed catalogues"
           pnpm db:seed
