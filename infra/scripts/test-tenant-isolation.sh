@@ -104,10 +104,13 @@ else
 fi
 
 # --- 5. ... nor write into another tenant ------------------------------------
-# -q here too, for consistency — this block only checks exit status so it
-# was not silently wrong like the two above, but every psql call in this
-# file should behave the same way rather than half of them being quiet.
-if psql "$APP_URL" -q <<SQL 2>/dev/null
+# Without -v ON_ERROR_STOP=1, psql does NOT exit non-zero when a statement
+# inside the script errors — it prints the error, treats the now-aborted
+# transaction's COMMIT as a no-op, and still exits 0. That reads as "the
+# insert succeeded" even when RLS correctly blocked it. -t -A also added so
+# the SELECT set_config(...) result doesn't print a stray table between the
+# PASS/FAIL lines.
+if psql "$APP_URL" -q -t -A -v ON_ERROR_STOP=1 <<SQL >/dev/null 2>/dev/null
 BEGIN;
 SELECT set_config('app.tenant_id', '$TENANT_A', true);
 INSERT INTO students (id, tenant_id, branch_id, admission_no, first_name)
@@ -122,7 +125,9 @@ else
 fi
 
 # --- 6. Audit tables are append-only -----------------------------------------
-if psql "$APP_URL" -q -c "DELETE FROM audit_logs;" 2>/dev/null; then
+# Same fix: ON_ERROR_STOP so a policy-blocked DELETE actually reports as a
+# psql failure instead of a silently-successful exit 0.
+if psql "$APP_URL" -q -v ON_ERROR_STOP=1 -c "DELETE FROM audit_logs;" >/dev/null 2>/dev/null; then
   fail "audit_logs is deletable by the app role"
 else
   pass "audit_logs cannot be deleted by the app role"
