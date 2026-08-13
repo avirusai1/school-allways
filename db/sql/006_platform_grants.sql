@@ -54,3 +54,16 @@ CREATE POLICY partners_platform_only ON public.partners
   WITH CHECK (app_is_platform_admin());
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.partners TO saw_app;
+
+-- Same story, same shape: no tenant_id column, so app_apply_tenant_rls()'s
+-- loop never touches it. Was previously created and granted from inside
+-- migration 0013 (2026-08-13), which ran too early on a fresh database —
+-- app_is_platform_admin() doesn't exist until this script runs. Moved here.
+ALTER TABLE public.platform_invoice_counters ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.platform_invoice_counters FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS invoice_counters_platform_only ON public.platform_invoice_counters;
+CREATE POLICY invoice_counters_platform_only ON public.platform_invoice_counters
+  USING (app_is_platform_admin())
+  WITH CHECK (app_is_platform_admin());
+
+GRANT SELECT, INSERT, UPDATE ON public.platform_invoice_counters TO saw_app;

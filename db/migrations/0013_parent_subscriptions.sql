@@ -138,13 +138,9 @@ CREATE TABLE IF NOT EXISTS "platform_invoice_counters" (
   "last_number" integer NOT NULL
 );--> statement-breakpoint
 
-ALTER TABLE public.platform_invoice_counters ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.platform_invoice_counters FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS invoice_counters_platform_only ON public.platform_invoice_counters;
-CREATE POLICY invoice_counters_platform_only ON public.platform_invoice_counters
-  USING (app_is_platform_admin())
-  WITH CHECK (app_is_platform_admin());
-GRANT SELECT, INSERT, UPDATE ON public.platform_invoice_counters TO saw_app;
-
-SELECT app_apply_tenant_rls();
-SELECT app_attach_sync_triggers();
+-- RLS + grants for platform_invoice_counters moved to db/sql/006_platform_grants.sql
+-- (2026-08-13). A migration runs during `pnpm db:migrate`, BEFORE 001-006 SQL —
+-- so app_is_platform_admin()/app_apply_tenant_rls() do not exist yet on a fresh
+-- database. This only worked on machines where those functions already existed
+-- from an earlier local-up.sh run. Every other table's RLS lives in the 00x
+-- scripts; this one should too, and now does.
