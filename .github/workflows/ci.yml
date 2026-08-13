@@ -119,15 +119,28 @@ jobs:
     timeout-minutes: 45
     strategy:
       fail-fast: false
+      # Each app has its OWN upload keystore, so each needs its own secrets.
+      # A single shared ANDROID_KEYSTORE_BASE64 would silently sign both apps
+      # with one upload key — no error, a valid-looking AAB, and no way to
+      # transfer or re-sign one app independently later.
       matrix:
-        app: [mobile-family, mobile-admin]
+        include:
+          - app: mobile-family
+            keystore_secret: FAMILY_ANDROID_KEYSTORE_BASE64
+            store_password_secret: FAMILY_ANDROID_KEYSTORE_PASSWORD
+            key_password_secret: FAMILY_ANDROID_KEY_PASSWORD
+          - app: mobile-admin
+            keystore_secret: ADMIN_ANDROID_KEYSTORE_BASE64
+            store_password_secret: ADMIN_ANDROID_KEYSTORE_PASSWORD
+            key_password_secret: ADMIN_ANDROID_KEY_PASSWORD
     env:
       # Staging/pilot API. Override with repo variable MOBILE_API_BASE_URL.
       MOBILE_API_BASE_URL: ${{ vars.MOBILE_API_BASE_URL || 'https://api.school.techallways.com/v1' }}
-      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      ANDROID_KEYSTORE_BASE64: ${{ secrets[matrix.keystore_secret] }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets[matrix.store_password_secret] }}
+      # Both keystores use alias `upload` (see scripts/create-upload-keystores.sh).
+      ANDROID_KEY_ALIAS: upload
+      ANDROID_KEY_PASSWORD: ${{ secrets[matrix.key_password_secret] }}
     defaults:
       run:
         working-directory: apps/${{ matrix.app }}

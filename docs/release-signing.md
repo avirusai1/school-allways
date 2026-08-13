@@ -62,14 +62,24 @@ CI builds a Play-uploadable AAB only when `ANDROID_KEYSTORE_BASE64` is set.
 Forks and PRs without secrets still run `flutter analyze`, `flutter test`, and
 `flutter build apk --debug`.
 
+The two apps have **separate** upload keystores, so the secrets are per-app.
+A single shared secret would sign both apps with one upload key — silently,
+producing a valid-looking AAB — and you could never transfer or re-sign one
+app independently afterwards.
+
+`ANDROID_KEY_ALIAS` is not a secret; it is hardcoded to `upload` in the
+workflow, matching `scripts/create-upload-keystores.sh`.
+
 Repo **secrets** (Settings → Secrets and variables → Actions):
 
 | Secret | Value |
 |---|---|
-| `ANDROID_KEYSTORE_BASE64` | `base64 -i upload-keystore.jks \| tr -d '\n'` |
-| `ANDROID_KEYSTORE_PASSWORD` | `storePassword` from `key.properties` |
-| `ANDROID_KEY_ALIAS` | `upload` |
-| `ANDROID_KEY_PASSWORD` | `keyPassword` from `key.properties` |
+| `FAMILY_ANDROID_KEYSTORE_BASE64` | `base64 -i apps/mobile-family/android/upload-keystore.jks \| tr -d '\n'` |
+| `FAMILY_ANDROID_KEYSTORE_PASSWORD` | `storePassword` from mobile-family's `key.properties` |
+| `FAMILY_ANDROID_KEY_PASSWORD` | `keyPassword` from mobile-family's `key.properties` |
+| `ADMIN_ANDROID_KEYSTORE_BASE64` | `base64 -i apps/mobile-admin/android/upload-keystore.jks \| tr -d '\n'` |
+| `ADMIN_ANDROID_KEYSTORE_PASSWORD` | `storePassword` from mobile-admin's `key.properties` |
+| `ADMIN_ANDROID_KEY_PASSWORD` | `keyPassword` from mobile-admin's `key.properties` |
 
 Repo **variable** (optional):
 
