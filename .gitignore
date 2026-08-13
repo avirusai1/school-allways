@@ -46,11 +46,20 @@ Thumbs.db
 !debug.keystore
 **/upload-keystore.jks
 
-# Local data / storage (block-volume mount is NOT in the repo)
-storage/
-uploads/
-backups/
-pgdata/
+# Local data / storage (block-volume mount is NOT in the repo).
+#
+# These MUST stay anchored. An unanchored `storage/` also matches
+# apps/api/src/common/storage/ — which is source code, not data — and
+# silently kept it out of the first commit. CI caught it as:
+#   Cannot find module '../../common/storage/storage.service'
+# Anchor any new rule here the same way, or check `git check-ignore -v <path>`
+# before trusting it.
+/storage/
+/uploads/
+/backups/
+/pgdata/
+apps/api/storage/
+apps/api/uploads/
 
 # Test / coverage
 coverage/
