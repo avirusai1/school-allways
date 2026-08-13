@@ -53,7 +53,12 @@ SQL
 
 query_as_tenant() {
   local tenant="$1" sql="$2"
-  psql "$APP_URL" -t -A -v ON_ERROR_STOP=1 <<SQL
+  # -q suppresses the BEGIN/COMMIT command-completion tags Postgres prints
+  # for transaction control statements. -t alone does not: it only silences
+  # SELECT row-count footers. Without -q, `| tail -1` below picks up the
+  # literal word "COMMIT" instead of the query result — which is exactly
+  # what happened the first time this script ran to completion.
+  psql "$APP_URL" -q -t -A -v ON_ERROR_STOP=1 <<SQL
 BEGIN;
 SELECT set_config('app.tenant_id', '$tenant', true);
 $sql
@@ -80,7 +85,7 @@ leaked=$(query_as_tenant "$TENANT_A" \
   || fail "LEAK: tenant A read $leaked of tenant B's students"
 
 # --- 3. No tenant context set at all -> nothing, not everything -------------
-no_ctx=$(psql "$APP_URL" -t -A <<SQL | tail -1
+no_ctx=$(psql "$APP_URL" -q -t -A <<SQL | tail -1
 BEGIN;
 SELECT set_config('app.tenant_id', '', true);
 SELECT count(*) FROM students;
@@ -99,6 +104,9 @@ else
 fi
 
 # --- 5. ... nor write into another tenant ------------------------------------
+# -q here too, for consistency — this block only checks exit status so it
+# was not silently wrong like the two above, but every psql call in this
+# file should behave the same way rather than half of them being quiet.
 if psql "$APP_URL" -q <<SQL 2>/dev/null
 BEGIN;
 SELECT set_config('app.tenant_id', '$TENANT_A', true);
