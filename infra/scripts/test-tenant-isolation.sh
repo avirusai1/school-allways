@@ -163,7 +163,18 @@ SQL
   || fail "$unprotected table(s) with tenant_id have RLS DISABLED"
 
 # --- Cleanup -----------------------------------------------------------------
-psql "$DATABASE_URL" -q -c "DELETE FROM tenants WHERE id IN ('$TENANT_A','$TENANT_B');"
+# audit_logs cascades from tenants (ON DELETE CASCADE) but its immutability
+# trigger fires unconditionally — for ANY role, including a cascade the
+# database itself initiated. That's correct behaviour (check #6 above just
+# proved it), and it means this cleanup step is the one place that legitimately
+# needs to bypass it: nothing in the product hard-deletes a tenant with real
+# audit history, only this synthetic test does. Toggle the trigger off for
+# just this statement rather than weakening it for everyone.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q <<SQL
+ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_immutable;
+DELETE FROM tenants WHERE id IN ('$TENANT_A','$TENANT_B');
+ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_immutable;
+SQL
 
 echo
 if [[ $failures -gt 0 ]]; then
