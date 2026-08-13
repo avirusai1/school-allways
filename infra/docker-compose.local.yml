@@ -1,0 +1,68 @@
+# Local Mac/Linux stack — Postgres + Redis only.
+# API runs on the host: `pnpm --filter @saw/api dev`
+#
+# Do NOT mount db/sql into initdb — those scripts assume migrated tables.
+# Use: `pnpm local:setup` after this comes up.
+#
+#   docker compose -f infra/docker-compose.local.yml --env-file .env up -d
+
+name: school-all-ways-local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-saw_owner}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-school_all_ways}
+      TZ: Asia/Kolkata
+      PGTZ: Asia/Kolkata
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - max_connections=50
+      - -c
+      - log_min_duration_statement=500
+    volumes:
+      - saw_pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER:-saw_owner} -d $${POSTGRES_DB:-school_all_ways}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - noeviction
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:?set in .env}
+    volumes:
+      - saw_redis:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  saw_pgdata:
+  saw_redis:

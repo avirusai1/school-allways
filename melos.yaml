@@ -1,0 +1,12 @@
+name: school_all_ways
+
+packages:
+  - packages/flutter/*
+  - apps/mobile-*
+
+command:
+  bootstrap:
+    runPubGetInParallel: true
+  clean:
+    hooks:
+      post: melos exec -- flutter clean

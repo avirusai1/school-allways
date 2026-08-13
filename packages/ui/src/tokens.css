@@ -1,0 +1,96 @@
+/**
+ * School All Ways design tokens — identical to Flutter AppColors / AppSpacing.
+ * Space-separated RGB for Tailwind opacity modifiers.
+ * A school overrides --color-primary-500 at runtime for white-label.
+ */
+:root {
+  /* Brand blue */
+  --color-blue-50: 241 246 251;
+  --color-blue-100: 220 232 244;
+  --color-blue-200: 180 205 230;
+  --color-blue-300: 127 169 209;
+  --color-blue-400: 74 130 184;
+  --color-blue-500: 27 94 156;
+  --color-blue-600: 22 78 130;
+  --color-blue-700: 18 62 104;
+  --color-blue-800: 14 47 79;
+  --color-blue-900: 10 33 56;
+
+  /* Accent amber */
+  --color-amber-50: 254 247 236;
+  --color-amber-100: 251 233 204;
+  --color-amber-200: 246 210 147;
+  --color-amber-300: 242 188 95;
+  --color-amber-400: 239 170 60;
+  --color-amber-500: 217 141 27;
+  --color-amber-600: 181 113 19;
+  --color-amber-700: 143 87 14;
+
+  /* Neutral grey — grey/600 is solid #526273 (spec typo had alpha) */
+  --color-grey-0: 255 255 255;
+  --color-grey-25: 250 251 252;
+  --color-grey-50: 244 246 248;
+  --color-grey-100: 234 238 242;
+  --color-grey-200: 218 224 230;
+  --color-grey-300: 191 200 210;
+  --color-grey-400: 148 162 177;
+  --color-grey-500: 107 123 140;
+  --color-grey-600: 82 98 115;
+  --color-grey-700: 61 76 92;
+  --color-grey-800: 38 49 61;
+  --color-grey-900: 22 32 43;
+
+  /* Semantic */
+  --color-green-50: 237 247 241;
+  --color-green-500: 46 125 79;
+  --color-green-700: 31 90 56;
+  --color-red-50: 252 238 236;
+  --color-red-500: 192 57 43;
+  --color-red-700: 142 42 32;
+  --color-orange-50: 253 243 231;
+  --color-orange-500: 199 119 0;
+  --color-orange-700: 149 79 0;
+  --color-cyan-50: 235 244 250;
+  --color-cyan-500: 42 111 168;
+  --color-cyan-700: 29 80 121;
+
+  /* White-label primary (defaults to blue/500) */
+  --color-primary-500: var(--color-blue-500);
+
+  /* Spacing (px) */
+  --space-0: 0px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+
+  /* Motion */
+  --duration-instant: 100ms;
+  --duration-fast: 160ms;
+  --duration-base: 220ms;
+  --duration-slow: 320ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-decelerate: cubic-bezier(0, 0, 0, 1);
+  --ease-accelerate: cubic-bezier(0.3, 0, 1, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0ms;
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+  }
+}

@@ -1,0 +1,24 @@
+name: core_auth
+description: Token storage, session, and tenant switching.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.5.1
+  flutter_secure_storage: ^9.2.2
+  shared_preferences: ^2.3.3
+  core_models:
+    path: ../core_models
+  core_network:
+    path: ../core_network
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+  flutter_test:
+    sdk: flutter

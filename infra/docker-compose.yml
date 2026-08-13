@@ -1,0 +1,190 @@
+# =============================================================================
+# School All Ways — production stack for a single Oracle Ampere A1 instance.
+#
+# SIZED FOR THE POST-15-JUNE-2026 ALWAYS FREE TIER: 2 OCPU / 12 GB RAM.
+# (Oracle halved this from 4 OCPU / 24 GB without announcement. If you are on
+# an older tenancy that still has 4/24, you can raise the limits below.)
+#
+# Memory budget, 12 GB total:
+#   postgres  4.0 GB   redis 1.0 GB   api 2.0 GB   worker 1.5 GB
+#   caddy     0.2 GB   backup/cron 0.3 GB
+#   OS + headroom ~3 GB
+#
+# NOT running here (deliberately):
+#   - any web frontend  -> Cloudflare Pages, free, keeps this box for the API
+#   - Kubernetes        -> the control plane alone would eat a whole core
+#   - Elasticsearch     -> pg_trgm covers our search needs at this scale
+# =============================================================================
+
+name: school-all-ways
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-saw_owner}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-school_all_ways}
+      # Asia/Kolkata everywhere — all school scheduling depends on it.
+      TZ: Asia/Kolkata
+      PGTZ: Asia/Kolkata
+    command:
+      - postgres
+      # --- Tuned for 4 GB allocation on 2 vCPU ---
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=3GB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - work_mem=16MB
+      - -c
+      - max_connections=100
+      - -c
+      - random_page_cost=1.1          # block volume is SSD-backed
+      - -c
+      - effective_io_concurrency=200
+      - -c
+      - wal_compression=on
+      - -c
+      - max_wal_size=2GB
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - log_min_duration_statement=500  # log anything slower than 500ms
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+    volumes:
+      # Data on the 200 GB Always Free block volume, NOT the boot volume.
+      - /mnt/blockvol/pgdata:/var/lib/postgresql/data
+      - ../db/sql:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:5432:5432"    # localhost only — never expose Postgres
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-saw_owner}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --maxmemory
+      - 768mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:?set in .env}
+    volumes:
+      - /mnt/blockvol/redis:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Kolkata
+      # 2 workers on 2 vCPU. Do not raise — you'll just add context switching.
+      WEB_CONCURRENCY: 2
+      NODE_OPTIONS: --max-old-space-size=768
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    volumes:
+      # File storage lives on the block volume (your storage decision).
+      - /mnt/blockvol/storage:/data/storage
+    ports:
+      - "127.0.0.1:3000:3000"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    command: ["node", "dist/worker.js"]
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Kolkata
+      NODE_OPTIONS: --max-old-space-size=640
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    volumes:
+      - /mnt/blockvol/storage:/data/storage
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /mnt/blockvol/caddy/data:/data
+      - /mnt/blockvol/caddy/config:/config
+      # Books and documents served directly by Caddy with Range support,
+      # so a 30 MB PDF never occupies a Node event loop.
+      - /mnt/blockvol/storage:/srv/storage:ro
+    depends_on:
+      - api
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: ../.env
+    entrypoint: ["/bin/sh", "/scripts/backup-loop.sh"]
+    volumes:
+      - ./scripts:/scripts:ro
+      - /mnt/blockvol/backups:/backups
+    depends_on:
+      postgres: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+networks:
+  default:
+    name: saw_net

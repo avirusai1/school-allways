@@ -1,0 +1,11 @@
+{
+  "@@locale": "hi",
+  "appTitle": "स्कूल ऑल वेज़ एडमिन",
+  "home": "होम",
+  "more": "और",
+  "signIn": "साइन इन",
+  "takeAttendance": "उपस्थिति",
+  "marksEntry": "अंक",
+  "offlineHint": "आप ऑफ़लाइन लग रहे हैं। कनेक्ट होने पर बदलाव सिंक होंगे।",
+  "studentsMarkedPresent": "{count} विद्यार्थी उपस्थित चिह्नित"
+}

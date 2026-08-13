@@ -1,0 +1,90 @@
+# School All Ways — Cursor Rules
+
+You are working on a multi-tenant school management SaaS for Indian K-12 schools.
+Read `CURSOR_BUILD_GUIDE.md` before writing code. These rules are non-negotiable.
+
+## THE FIVE LAWS
+
+1. **Tenant isolation is absolute.** Every query touching school data goes through
+   `TenantDbService.run()`. Never import a raw drizzle client. The tenant id comes
+   from the verified JWT claim — NEVER from a header, query param, or request body.
+   If you write `req.headers['x-tenant-id']` you have created a P0 security bug.
+
+2. **Scope before you query.** Permission checks alone are insufficient. Every list
+   endpoint returning student-linked rows MUST apply `scopeFilter()`. Every
+   single-record read or mutation MUST call `assertInScope()`. An empty scope list
+   means MATCH NOTHING, never match everything.
+
+3. **Money is integer paise.** `₹1,250.50` is `125050`. Never float, never a
+   decimal string. All arithmetic in paise; format only at the API edge.
+
+4. **Sessions, not "current".** Every academic entity binds to `academic_session_id`.
+   Year rollover creates new rows. Never mutate last year's data in place.
+
+5. **Under-18 = "child" under the DPDP Act.** No behavioural tracking, no analytics
+   SDKs, no ad SDKs, ever. Restricted-tier data (counselling notes, safe reports,
+   POSH) requires a `record_access_grant` on top of the permission and writes a
+   `pii_access_logs` row on every read.
+
+## PERFORMANCE — we run on 2 vCPU / 12 GB
+
+Read `docs/06-performance-playbook.md`. Summary of what will get a PR rejected:
+
+- `SELECT *` — always name columns.
+- `OFFSET` pagination — use keyset/cursor pagination.
+- `COUNT(*)` on a hot path — use a rollup table or an approximate count.
+- N+1 queries — batch, or use a single join. Loops containing `await db...` are bugs.
+- Any blocking work in a request handler (PDF render, bulk import, notification
+  fan-out, image resize). Queue it with BullMQ.
+- Missing index on a new `WHERE`/`ORDER BY` column.
+- Returning a whole entity when the client needs three fields.
+
+## CONVENTIONS
+
+**Backend (NestJS + Drizzle)**
+- One module per domain, mirroring `db/schema/` file numbering.
+- Controllers are thin: validate → delegate → shape. Business logic lives in services.
+- DTOs use `class-validator`. `forbidNonWhitelisted` is on — unknown fields 400.
+- Every route is guarded by default. Mark exceptions with `@Public()`.
+- Declare permissions with `@RequirePermission('module.resource.action')` and take
+  the grant with `@Grant('module.resource.action')`.
+- Mutations that clients may retry offline accept `X-Client-Mutation-Id` and are
+  idempotent via the `idempotency_keys` table.
+- Errors: throw Nest HTTP exceptions with human-readable messages. Parents and
+  teachers read these — "Invalid input" helps nobody.
+
+**Database**
+- Never write raw SQL string interpolation. Use drizzle's `sql` tagged template.
+- New table with school data => it MUST have `tenant_id`, and `...timestamps`.
+- Client-cached table => spread `...syncable`.
+- Add the index in the same commit as the query that needs it.
+
+**Flutter**
+- Riverpod for state; no `setState` in feature code.
+- `const` constructors everywhere possible.
+- Lists are always `ListView.builder`, never a mapped `Column`.
+- JSON parsing above ~50 KB goes in an isolate (`compute`).
+- Offline-first: read from Drift, sync on demand. See `docs/04-sync-architecture.md`.
+- Never block the UI thread on network. Optimistic updates + outbox queue.
+
+**Naming**
+- DB columns `snake_case`; TS `camelCase`; permission codes `area.resource.action`.
+- Files: `kebab-case.ts`. Nest artefacts keep their suffix: `.service.ts`,
+  `.controller.ts`, `.guard.ts`, `.dto.ts`.
+
+## STYLE
+
+- Comment WHY, not WHAT. Explain the trade-off, the constraint, or the trap.
+  Especially: why a query is shaped a certain way for performance, and why a
+  permission check is where it is.
+- Prefer clear, boring code over clever code.
+- No `any`. Use `unknown` and narrow.
+- Do not add a dependency without a reason that survives "can the stdlib do this?"
+
+## WHEN UNSURE
+
+- Read the relevant `docs/0X-*.md` first — the decisions are recorded there.
+- Behaviour of a role or permission: `db/seeds/roles.ts` and
+  `db/seeds/permissions.ts` are the spec, and `db/seeds/verify.ts` is the test.
+- If a product decision genuinely isn't recorded, say so and ask. Do not invent
+  policy about children's data.

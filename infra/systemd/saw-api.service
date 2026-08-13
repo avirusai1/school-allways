@@ -1,0 +1,28 @@
+[Unit]
+Description=School All Ways API (NestJS)
+Documentation=https://github.com/avirusai1/school-all-ways/blob/main/docs/deploy-staging.md
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=www-data
+WorkingDirectory=/var/www/techallways_school/apps/api
+# Root-owned env file. Mode 0640, owner root:ubuntu. Never put this in the repo.
+EnvironmentFile=/etc/saw/api.env
+Environment=NODE_ENV=production
+Environment=TZ=Asia/Kolkata
+Environment=NODE_OPTIONS=--max-old-space-size=768
+ExecStart=/usr/bin/node -r ./scripts/alias-db.cjs dist/apps/api/src/main.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+# Give enableShutdownHooks a chance to drain the pool.
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

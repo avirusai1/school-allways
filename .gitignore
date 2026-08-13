@@ -1,0 +1,67 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# Environment — NEVER commit
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Flutter / Dart
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/build/
+**/android/.gradle/
+**/android/local.properties
+**/android/key.properties
+**/android/app/google-services.json
+**/ios/Pods/
+**/ios/.symlinks/
+*.jks
+*.keystore
+!debug.keystore
+**/upload-keystore.jks
+
+# Local data / storage (block-volume mount is NOT in the repo)
+storage/
+uploads/
+backups/
+pgdata/
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Drizzle
+db/migrations/meta/_journal.json.bak
+
+# The repo-root /build directory is product SPECS (00-…16-…md), not build
+# output. The `build/` and `**/build/` rules above are for Flutter/Node
+# artefacts and would otherwise silently exclude every spec in the project.
+# These negations must stay at the end of the file — later rules win.
+!/build/
+!/build/*.md

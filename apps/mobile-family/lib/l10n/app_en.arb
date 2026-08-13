@@ -1,0 +1,15 @@
+{
+  "@@locale": "en",
+  "appTitle": "School All Ways",
+  "@appTitle": { "description": "Application title" },
+  "home": "Home",
+  "more": "More",
+  "signIn": "Sign in",
+  "offlineHint": "You appear to be offline. Changes will sync when you reconnect.",
+  "studentsMarkedPresent": "{count} students marked present",
+  "@studentsMarkedPresent": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  }
+}

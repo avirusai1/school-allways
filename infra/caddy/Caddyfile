@@ -1,0 +1,109 @@
+# =============================================================================
+# School All Ways — Caddy reverse proxy
+#
+# Domain: school.techallways.com
+#
+# Only the API and static file serving run here. All four web frontends are on
+# Cloudflare Pages. Put Cloudflare (free plan, proxied/orange-cloud) in front
+# of this box: it absorbs bandwidth, gives you a WAF, and hides the origin IP
+# so the 10 Mbps Always Free load balancer never becomes the bottleneck.
+# =============================================================================
+
+{
+	email admin@techallways.com
+	servers {
+		trusted_proxies cloudflare
+	}
+}
+
+# -----------------------------------------------------------------------------
+# API
+# -----------------------------------------------------------------------------
+api.school.techallways.com {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options    "nosniff"
+		X-Frame-Options           "DENY"
+		Referrer-Policy           "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Health check — excluded from logs to keep them readable.
+	handle /health {
+		reverse_proxy api:3000
+	}
+
+	# WebSocket for live bus tracking (D6).
+	handle /ws/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		reverse_proxy api:3000 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Request-Id {http.request.uuid}
+		}
+	}
+
+	log {
+		output file /data/logs/api.log {
+			roll_size 50MiB
+			roll_keep 5
+		}
+	}
+}
+
+# -----------------------------------------------------------------------------
+# File / book delivery
+#
+# WHY THIS IS SEPARATE: a 30 MB textbook PDF served through Node would pin an
+# event loop for the duration of the download. Caddy streams it from disk with
+# Range support, so an interrupted download on a patchy mobile connection
+# resumes instead of restarting — which is the whole point of the
+# download-once-read-offline model.
+#
+# Access control: the API issues a short-lived signed URL after checking
+# permissions; Caddy validates the signature. Nothing here is public.
+# -----------------------------------------------------------------------------
+files.school.techallways.com {
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options    "nosniff"
+		# Books are immutable per version, so cache them hard on the device.
+		Cache-Control             "private, max-age=31536000, immutable"
+	}
+
+	# Verify the signed URL with the API before serving bytes.
+	forward_auth api:3000 {
+		uri /internal/verify-file-access
+		copy_headers X-File-Path X-Tenant-Id
+	}
+
+	root * /srv/storage
+	file_server {
+		precompressed br gzip
+	}
+
+	log {
+		output file /data/logs/files.log {
+			roll_size 20MiB
+			roll_keep 3
+		}
+	}
+}
+
+# -----------------------------------------------------------------------------
+# Wildcard for per-school subdomains (dps-rohini.school.techallways.com).
+# Requires a DNS-01 ACME challenge — configure the Cloudflare DNS plugin, or
+# keep tenants on a path prefix until you do.
+# -----------------------------------------------------------------------------
+# *.school.techallways.com {
+# 	tls {
+# 		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+# 	}
+# 	reverse_proxy api:3000
+# }

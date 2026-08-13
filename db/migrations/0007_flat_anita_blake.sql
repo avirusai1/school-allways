@@ -1,0 +1,2 @@
+CREATE INDEX IF NOT EXISTS "leave_req_pending_idx" ON "leave_requests" USING btree ("branch_id") WHERE "leave_requests"."status" = 'pending';--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "concessions_pending_idx" ON "student_concessions" USING btree ("tenant_id") WHERE "student_concessions"."status" = 'pending';
