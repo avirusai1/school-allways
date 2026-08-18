@@ -62,7 +62,31 @@ Restart the API after changing env. Boot log should say
 warns that the three values are unset, the process did not pick up the
 file (blank values, or the service was not restarted).
 
-## 4. What this does not cover
+## 4. GitHub Actions secrets (mobile CI release builds)
+
+CI cannot see your Mac's `google-services.json` — it's gitignored, so the
+runner has neither file. The mobile CI job (`.github/workflows/ci.yml`)
+decodes each app's file from a repo secret, the same pattern as the upload
+keystores in `docs/release-signing.md`. **Per-app secret, per-app file** —
+same reasoning as the keystores: one shared secret would silently put the
+wrong app's Firebase config into the other app's build.
+
+Repo **secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+|---|---|
+| `FAMILY_GOOGLE_SERVICES_JSON_BASE64` | `base64 -i apps/mobile-family/android/app/google-services.json \| tr -d '\n'` |
+| `ADMIN_GOOGLE_SERVICES_JSON_BASE64` | `base64 -i apps/mobile-admin/android/app/google-services.json \| tr -d '\n'` |
+
+The release-build step now requires **both** the keystore secret and this
+one before it runs — signing an app without Firebase config would produce
+something that installs but silently never receives push, which is worse
+than the build just failing loudly. If either secret is missing, the
+release step and the artifact-upload step both skip cleanly; the debug
+build still runs regardless, so CI stays green for everything except the
+one thing that's actually missing.
+
+## 5. What this does not cover
 
 - iOS (`GoogleService-Info.plist`, APNs key) — Android-only for the pilot.
 - SMS (blocked on DLT entity + template approval).

@@ -150,10 +150,12 @@ jobs:
             keystore_secret: FAMILY_ANDROID_KEYSTORE_BASE64
             store_password_secret: FAMILY_ANDROID_KEYSTORE_PASSWORD
             key_password_secret: FAMILY_ANDROID_KEY_PASSWORD
+            google_services_secret: FAMILY_GOOGLE_SERVICES_JSON_BASE64
           - app: mobile-admin
             keystore_secret: ADMIN_ANDROID_KEYSTORE_BASE64
             store_password_secret: ADMIN_ANDROID_KEYSTORE_PASSWORD
             key_password_secret: ADMIN_ANDROID_KEY_PASSWORD
+            google_services_secret: ADMIN_GOOGLE_SERVICES_JSON_BASE64
     env:
       # Staging/pilot API. Override with repo variable MOBILE_API_BASE_URL.
       MOBILE_API_BASE_URL: ${{ vars.MOBILE_API_BASE_URL || 'https://api.school.techallways.com/v1' }}
@@ -162,6 +164,11 @@ jobs:
       # Both keystores use alias `upload` (see scripts/create-upload-keystores.sh).
       ANDROID_KEY_ALIAS: upload
       ANDROID_KEY_PASSWORD: ${{ secrets[matrix.key_password_secret] }}
+      # google-services.json is gitignored (same reasoning as the keystore: it
+      # is per-app, not secret in the cryptographic sense, but there's no
+      # reason to make it public either). Each app has its own file, so its
+      # own secret — see docs/push-setup.md.
+      GOOGLE_SERVICES_JSON_BASE64: ${{ secrets[matrix.google_services_secret] }}
     defaults:
       run:
         working-directory: apps/${{ matrix.app }}
@@ -204,12 +211,20 @@ jobs:
             echo "keyPassword=${ANDROID_KEY_PASSWORD}"
           } > key.properties
 
+      - name: Decode google-services.json
+        if: env.GOOGLE_SERVICES_JSON_BASE64 != ''
+        working-directory: apps/${{ matrix.app }}/android/app
+        run: echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > google-services.json
+
+      # Gated on BOTH secrets: signing without Firebase config would produce
+      # an app that installs but silently never gets push notifications —
+      # worse than failing loudly, since nothing would flag it.
       - name: Release app bundle
-        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        if: env.ANDROID_KEYSTORE_BASE64 != '' && env.GOOGLE_SERVICES_JSON_BASE64 != ''
         run: flutter build appbundle --release --dart-define=API_BASE_URL=${{ env.MOBILE_API_BASE_URL }}
 
       - name: Upload app bundle
-        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        if: env.ANDROID_KEYSTORE_BASE64 != '' && env.GOOGLE_SERVICES_JSON_BASE64 != ''
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.app }}-aab
