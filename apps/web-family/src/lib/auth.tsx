@@ -13,9 +13,9 @@ type AuthContextValue = {
   session: AuthSession | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  requestOtp: (phone: string) => Promise<{ expiresInSeconds: number; devOtp?: string }>;
-  verifyOtp: (phone: string, otp: string, tenantId?: string) => Promise<void>;
-  joinWithToken: (token: string) => Promise<JoinResult>;
+  loginWithPassword: (email: string, password: string) => Promise<void>;
+  previewJoin: (token: string) => Promise<JoinResult>;
+  activateJoin: (token: string, password: string) => Promise<JoinResult>;
   logout: () => Promise<void>;
 };
 
@@ -29,9 +29,9 @@ export type JoinStudent = {
 };
 
 export type JoinResult = {
-  status: 'invalid' | 'expired' | 'already_activated' | 'joined';
+  status: 'invalid' | 'expired' | 'already_activated' | 'pending' | 'joined';
   schoolName?: string;
-  purpose?: 'parent_profile' | 'staff_invite';
+  purpose?: 'parent_profile' | 'staff_invite' | 'student_invite';
   auth?: {
     accessToken: string;
     refreshToken: string;
@@ -49,6 +49,18 @@ async function fetchSession(): Promise<AuthSession | null> {
   return authSessionSchema.parse(raw);
 }
 
+async function persistAuth(auth: NonNullable<JoinResult['auth']>, qc: ReturnType<typeof useQueryClient>) {
+  setTokens(auth.accessToken, auth.refreshToken);
+  if (auth.requiresTenantSelection && auth.tenants?.[0]) {
+    const selected = await apiFetch<{ accessToken: string }>('/auth/select-tenant', {
+      method: 'POST',
+      body: JSON.stringify({ tenantId: auth.tenants[0].id }),
+    });
+    setTokens(selected.accessToken);
+  }
+  await qc.invalidateQueries({ queryKey: ['session'] });
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
 
@@ -59,71 +71,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     retry: false,
   });
 
-  const requestOtp = useCallback(async (phone: string) => {
-    return apiFetch<{ expiresInSeconds: number; devOtp?: string }>('/auth/otp/request', {
-      method: 'POST',
-      body: JSON.stringify({ phone, purpose: 'login' }),
-    });
-  }, []);
-
-  const verifyOtp = useCallback(
-    async (phone: string, otp: string, tenantId?: string) => {
+  const loginWithPassword = useCallback(
+    async (email: string, password: string) => {
       const body = await apiFetch<{
         accessToken: string;
         refreshToken: string;
         requiresTenantSelection?: boolean;
         tenants?: { id: string; name: string }[];
-      }>('/auth/otp/verify', {
+      }>('/auth/password/login', {
         method: 'POST',
-        body: JSON.stringify({ phone, purpose: 'login', code: otp }),
+        body: JSON.stringify({ email, password }),
       });
 
-      // Backend should refuse invited-only accounts before issuing tokens.
-      // Keep this guard so an empty tenant list never looks like a successful login.
       if (body.requiresTenantSelection && (!body.tenants || body.tenants.length === 0)) {
         throw new ApiError(
           403,
-          'You have an invitation waiting — check your SMS or WhatsApp for the join link from your school.',
+          'You have an invitation waiting — check your email for the join link from your school.',
           'INVITATION_PENDING',
         );
       }
 
-      setTokens(body.accessToken, body.refreshToken);
-      if (body.requiresTenantSelection && body.tenants?.[0] && !tenantId) {
-        const selected = await apiFetch<{ accessToken: string }>('/auth/select-tenant', {
-          method: 'POST',
-          body: JSON.stringify({ tenantId: body.tenants[0].id }),
-        });
-        setTokens(selected.accessToken);
-      }
-      await qc.invalidateQueries({ queryKey: ['session'] });
+      await persistAuth(body, qc);
     },
     [qc],
   );
 
-  /**
-   * Activation by invitation link. Stores the session exactly the way OTP
-   * verification does — same helpers, same tenant auto-selection — because a
-   * session that arrives by a different route must still behave identically.
-   */
-  const joinWithToken = useCallback(
-    async (token: string): Promise<JoinResult> => {
+  const previewJoin = useCallback(async (token: string): Promise<JoinResult> => {
+    return apiFetch<JoinResult>(`/auth/join/${encodeURIComponent(token)}`, {
+      method: 'POST',
+    });
+  }, []);
+
+  const activateJoin = useCallback(
+    async (token: string, password: string): Promise<JoinResult> => {
       const body = await apiFetch<JoinResult>(
-        `/auth/join/${encodeURIComponent(token)}`,
-        { method: 'POST' },
+        `/auth/join/${encodeURIComponent(token)}/activate`,
+        { method: 'POST', body: JSON.stringify({ password }) },
       );
-
       if (body.status !== 'joined' || !body.auth) return body;
-
-      setTokens(body.auth.accessToken, body.auth.refreshToken);
-      if (body.auth.requiresTenantSelection && body.auth.tenants?.[0]) {
-        const selected = await apiFetch<{ accessToken: string }>('/auth/select-tenant', {
-          method: 'POST',
-          body: JSON.stringify({ tenantId: body.auth.tenants[0].id }),
-        });
-        setTokens(selected.accessToken);
-      }
-      await qc.invalidateQueries({ queryKey: ['session'] });
+      await persistAuth(body.auth, qc);
       return body;
     },
     [qc],
@@ -146,12 +132,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       isLoading: sessionQuery.isPending,
       isAuthenticated: Boolean(session),
-      requestOtp,
-      verifyOtp,
-      joinWithToken,
+      loginWithPassword,
+      previewJoin,
+      activateJoin,
       logout,
     }),
-    [session, sessionQuery.isPending, requestOtp, verifyOtp, joinWithToken, logout],
+    [session, sessionQuery.isPending, loginWithPassword, previewJoin, activateJoin, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

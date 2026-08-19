@@ -5,6 +5,8 @@ import { AuthService } from './auth.service';
 describe('AuthService', () => {
   const repo = {
     findUserByPhone: vi.fn(),
+    findUserByEmail: vi.fn(),
+    findUserById: vi.fn(),
     findMembership: vi.fn(),
     findBranch: vi.fn(),
     listActiveMemberships: vi.fn(),
@@ -86,8 +88,7 @@ describe('AuthService', () => {
   });
 
   it('auto-scopes single-membership users', async () => {
-    otp.verifyOtp.mockResolvedValue(undefined);
-    repo.findUserByPhone.mockResolvedValue({
+    repo.findUserById.mockResolvedValue({
       id: 'user-1',
       fullName: 'Sunita Sharma',
       preferredLanguage: 'hi',
@@ -114,11 +115,7 @@ describe('AuthService', () => {
       sessionId: 'sess-1',
     });
 
-    const result = await service.verifyOtp({
-      phone: '919876543210',
-      code: '123456',
-      purpose: 'login',
-    });
+    const result = await service.issueSessionForVerifiedUser('user-1');
 
     expect(result.requiresTenantSelection).toBe(false);
     expect(tokens.createSession).toHaveBeenCalledWith(
@@ -126,9 +123,8 @@ describe('AuthService', () => {
     );
   });
 
-  it('refuses OTP login when the only membership is still invited', async () => {
-    otp.verifyOtp.mockResolvedValue(undefined);
-    repo.findUserByPhone.mockResolvedValue({
+  it('refuses login when the only membership is still invited', async () => {
+    repo.findUserById.mockResolvedValue({
       id: 'user-invited',
       fullName: 'Parent of Meera',
       preferredLanguage: 'en',
@@ -139,21 +135,14 @@ describe('AuthService', () => {
     repo.listActiveMemberships.mockResolvedValue([]);
     repo.hasInvitedMembership.mockResolvedValue(true);
 
-    await expect(
-      service.verifyOtp({
-        phone: '919810000121',
-        code: '123456',
-        purpose: 'login',
-      }),
-    ).rejects.toMatchObject({
+    await expect(service.issueSessionForVerifiedUser('user-invited')).rejects.toMatchObject({
       code: 'INVITATION_PENDING',
     });
     expect(tokens.createSession).not.toHaveBeenCalled();
   });
 
-  it('refuses OTP login when the account has no school membership at all', async () => {
-    otp.verifyOtp.mockResolvedValue(undefined);
-    repo.findUserByPhone.mockResolvedValue({
+  it('refuses login when the account has no school membership at all', async () => {
+    repo.findUserById.mockResolvedValue({
       id: 'user-orphan',
       fullName: 'Orphan Parent',
       preferredLanguage: 'en',
@@ -164,16 +153,21 @@ describe('AuthService', () => {
     repo.listActiveMemberships.mockResolvedValue([]);
     repo.hasInvitedMembership.mockResolvedValue(false);
 
-    await expect(
-      service.verifyOtp({
-        phone: '919800000001',
-        code: '123456',
-        purpose: 'login',
-      }),
-    ).rejects.toMatchObject({
+    await expect(service.issueSessionForVerifiedUser('user-orphan')).rejects.toMatchObject({
       code: 'NO_SCHOOL_ACCESS',
     });
     expect(tokens.createSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects phone OTP when the purpose is login', async () => {
+    await expect(
+      service.requestOtp({ phone: '919876543210', purpose: 'login' }),
+    ).rejects.toMatchObject({ code: 'GONE' });
+    await expect(
+      service.verifyOtp({ phone: '919876543210', code: '123456', purpose: 'login' }),
+    ).rejects.toMatchObject({ code: 'GONE' });
+    expect(otp.requestOtp).not.toHaveBeenCalled();
+    expect(otp.verifyOtp).not.toHaveBeenCalled();
   });
 
   it('reassigns userId on the same FCM token rather than inserting a second row', async () => {

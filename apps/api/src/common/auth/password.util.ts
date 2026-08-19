@@ -1,6 +1,9 @@
 import * as argon2 from 'argon2';
 import { randomBytes } from 'node:crypto';
 
+/** Same floor as `db/seeds/platform-admin.ts`. Login still accepts older 8+ hashes. */
+export const MIN_PASSWORD_LENGTH = 12;
+
 /** Same Argon2id parameters as `db/seeds/platform-admin.ts` (E3). */
 export async function hashPassword(password: string): Promise<string> {
   return argon2.hash(password, { type: argon2.argon2id });

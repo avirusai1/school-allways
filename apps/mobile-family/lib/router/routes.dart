@@ -2,8 +2,8 @@
 abstract final class Routes {
   static const splash = '/';
   static const login = '/login';
-  static const otp = '/login/otp';
   static const selectSchool = '/select-school';
+  static const joinPrefix = '/join';
 
   static const home = '/home';
   static const attendance = '/attendance';

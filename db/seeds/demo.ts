@@ -11,13 +11,11 @@
  * un-onboarded fixture below keeps the wizard and its gate testable without
  * hand-editing tenants.
  *
- * Logins (password for all staff): Demo@12345
+ * Logins (password for all four: Demo@12345)
  *   principal@sunrise.demo  — Principal
  *   teacher@sunrise.demo    — Class teacher (V-A)
  *   admin@sunrise.demo      — School admin
- *
- * Parent (OTP — use family app / web; OTP returned as devOtp in development):
- *   919876543210
+ *   parent@sunrise.demo     — Parent (Aarav + Ananya)
  */
 
 import * as argon2 from 'argon2';
@@ -58,6 +56,7 @@ if (!DATABASE_URL) {
 const DEMO_SLUG = 'sunrise-demo';
 const DEMO_PASSWORD = 'Demo@12345';
 const PARENT_PHONE = '919876543210';
+const PARENT_EMAIL = 'parent@sunrise.demo';
 
 /** Un-onboarded fixture — the only tenant that should ever hit OnboardingGate. */
 const ONBOARDING_SLUG = 'saw-onboarding-test';
@@ -521,7 +520,7 @@ async function main() {
     // Their audit rows went with the tenant above; audit_logs.actor_user_id is
     // ON DELETE NO ACTION, so this would otherwise fail on a used tenant.
     await db.delete(users).where(
-      sql`${users.email} IN ('principal@sunrise.demo','teacher@sunrise.demo','admin@sunrise.demo')
+      sql`${users.email} IN ('principal@sunrise.demo','teacher@sunrise.demo','admin@sunrise.demo','parent@sunrise.demo')
         OR ${users.phone} = ${PARENT_PHONE}`,
     );
   });
@@ -757,6 +756,9 @@ async function main() {
     .values({
       phone: PARENT_PHONE,
       phoneVerifiedAt: new Date(),
+      email: PARENT_EMAIL,
+      emailVerifiedAt: new Date(),
+      passwordHash,
       fullName: 'Vikram Sharma',
       displayName: 'Vikram',
       kind: 'guardian',
@@ -794,7 +796,7 @@ async function main() {
       occupation: 'Engineer',
     })
     .returning();
-  log('parent', `${PARENT_PHONE} (OTP)`);
+  log('parent', `${PARENT_EMAIL} / ${DEMO_PASSWORD}`);
 
   // Aarav and Ananya are the two named children the parent login is attached
   // to; the rest fill the registers out so attendance is a percentage of a
@@ -913,9 +915,7 @@ Done. Demo credentials:
   Principal:       principal@sunrise.demo
   Class teacher:   teacher@sunrise.demo
   School admin:    admin@sunrise.demo
-
-  Parent phone:    ${PARENT_PHONE}
-  (OTP login — in development the API returns devOtp)
+  Parent:          ${PARENT_EMAIL}
 
   Tenant slug:     ${DEMO_SLUG}
   Tenant id:       ${tenant.id}

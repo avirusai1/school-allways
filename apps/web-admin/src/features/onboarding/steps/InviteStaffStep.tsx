@@ -45,7 +45,7 @@ export const InviteStaffStep = forwardRef<InviteStepHandle, Props>(
         />
       ) : (
         <EmptyState
-          headline="No staff with a mobile number yet"
+          headline="No staff with an email yet"
           body="Import your staff first, or skip this step and invite them later from Staff."
         />
       );
@@ -66,7 +66,7 @@ export const InviteStaffStep = forwardRef<InviteStepHandle, Props>(
     return (
       <div className="flex flex-col gap-5">
         <p className="text-body text-grey-900">
-          {staff.eligible} staff have a mobile number on file
+          {staff.eligible} staff have an email on file
         </p>
 
         <label className="flex items-start gap-2 text-body-small text-grey-900">
@@ -76,14 +76,14 @@ export const InviteStaffStep = forwardRef<InviteStepHandle, Props>(
             checked={optIn}
             onChange={(e) => setOptIn(e.target.checked)}
           />
-          Send an invitation by SMS
+          Send an invitation by email
         </label>
 
         <div>
           <p className="text-body-small text-grey-600">Preview:</p>
           <p className="mt-1 rounded-md border border-grey-200 bg-grey-25 px-4 py-3 text-body-small text-grey-900">
-            {schoolName} has invited you to School All Ways. Tap to set up your
-            account: saw.link/j/a4f2
+            {schoolName} has invited you to School All Ways. Open the link in
+            your email to set your password.
           </p>
         </div>
 

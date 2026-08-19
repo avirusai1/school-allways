@@ -1,9 +1,13 @@
 /**
  * Module A3 — Identity & authentication.
  *
- * PHONE-FIRST BY DESIGN. In Indian schools, a parent has a mobile number and
- * often no email. Phone + OTP is the primary credential; email/password is a
- * secondary path for staff who prefer a desktop login.
+ * EMAIL INVITE + PASSWORD is the only login. Staff, students, and parents
+ * all receive a join link by email, set their own password, and sign in with
+ * that email + password afterwards. Phone stays on the record as a contact
+ * field (SMS/WhatsApp, emergency). It is not a credential.
+ *
+ * (The original phone-first design was written because many Indian parents
+ * have no email. That product decision was reversed on 2026-08-18.)
  *
  * IMPORTANT — one human, one user row, many roles, many tenants.
  * A parent with children in two different schools on our platform has ONE
@@ -61,14 +65,15 @@ export const users = pgTable(
   {
     id: pk(),
 
-    /** E.164 without '+'. THE primary credential. */
+    /** E.164 without '+'. Contact field — not a login credential. */
     phone: phoneCol('phone'),
     phoneVerifiedAt: timestamp('phone_verified_at', { withTimezone: true }),
 
+    /** Primary login identifier after the invite is activated. */
     email: varchar('email', { length: 254 }),
     emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
 
-    /** Argon2id. Null for OTP-only users (most parents). */
+    /** Argon2id. Null until the person sets a password via the join link. */
     passwordHash: text('password_hash'),
 
     fullName: varchar('full_name', { length: 150 }).notNull(),

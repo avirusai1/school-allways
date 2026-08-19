@@ -21,6 +21,18 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Invite emails point at FAMILY_WEB_URL/join/:token. Without this
+                 filter the link only opens in the browser. Digital Asset Links
+                 (assetlinks.json) still needed for silent autoVerify. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="app.school.techallways.com"
+                    android:pathPrefix="/join"/>
+            </intent-filter>
         </activity>
         <meta-data
             android:name="flutterEmbedding"

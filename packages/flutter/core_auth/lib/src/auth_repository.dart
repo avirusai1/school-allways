@@ -67,6 +67,30 @@ class TenantSummary {
   }
 }
 
+class JoinPreview {
+  const JoinPreview({
+    required this.status,
+    this.schoolName,
+    this.purpose,
+    this.auth,
+  });
+
+  final String status;
+  final String? schoolName;
+  final String? purpose;
+  final Map<String, dynamic>? auth;
+
+  factory JoinPreview.fromJson(Map<String, dynamic> json) {
+    final rawAuth = json['auth'];
+    return JoinPreview(
+      status: json['status'] as String? ?? 'invalid',
+      schoolName: json['schoolName'] as String?,
+      purpose: json['purpose'] as String?,
+      auth: rawAuth is Map<String, dynamic> ? rawAuth : null,
+    );
+  }
+}
+
 /// Auth API + local session cache.
 class AuthRepository {
   AuthRepository({
@@ -127,6 +151,27 @@ class AuthRepository {
     );
     final body = res.data ?? const <String, dynamic>{};
     return _persistTokens(body);
+  }
+
+  Future<JoinPreview> previewJoin(String token) async {
+    final res = await _api.post<Map<String, dynamic>>(
+      '/auth/join/${Uri.encodeComponent(token)}',
+    );
+    final body = res.data ?? const <String, dynamic>{};
+    return JoinPreview.fromJson(body);
+  }
+
+  Future<JoinPreview> activateJoin(String token, String password) async {
+    final res = await _api.post<Map<String, dynamic>>(
+      '/auth/join/${Uri.encodeComponent(token)}/activate',
+      data: {'password': password},
+    );
+    final body = res.data ?? const <String, dynamic>{};
+    final preview = JoinPreview.fromJson(body);
+    if (preview.status == 'joined' && preview.auth != null) {
+      await _persistTokens(preview.auth!);
+    }
+    return preview;
   }
 
   Future<AuthTokensResult> _persistTokens(Map<String, dynamic> body) async {

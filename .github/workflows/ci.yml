@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   verify:
@@ -245,4 +246,103 @@ jobs:
           name: ${{ matrix.app }}-apk
           path: apps/${{ matrix.app }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Manual-trigger only (Actions tab -> Run workflow). Never runs on a plain
+  # push, so merging to main does not silently redeploy production.
+  #
+  # The API is built and migrated ON THE VPS, not on this runner. The runner
+  # is x86_64; the Oracle VPS is aarch64. argon2 (and any other native addon)
+  # compiles a binary for whatever machine runs `pnpm install` — shipping a
+  # runner-built node_modules to an arm64 box would silently fail to load.
+  # The four web apps have no native deps, so those ARE built here and rsynced
+  # as static files — that's safe and much faster than rebuilding them on a
+  # shared VPS every deploy.
+  #
+  # web-marketing (Next.js) is deliberately not handled here yet — it isn't a
+  # plain static `dist/` like the three Vite apps, and today's change doesn't
+  # touch it. Deploying it needs its own look before automating.
+  # ---------------------------------------------------------------------------
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: [verify, tenant-isolation]
+    if: github.event_name == 'workflow_dispatch'
+    environment: production
+    env:
+      DEPLOY_HOST: 130.210.31.130
+      DEPLOY_USER: saw-deploy
+      DEPLOY_PATH: /var/www/techallways_school
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build web apps (admin, family, control — no native deps, safe to build here)
+        run: |
+          pnpm --filter @saw/web-admin build
+          pnpm --filter @saw/web-family build
+          pnpm --filter @saw/web-control build
+
+      - name: Set up deploy SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      # apps/api/.env.production and the four *-site/site build-output dirs are
+      # excluded — they don't exist in this checkout and --delete would wipe
+      # them on the VPS otherwise. See docs/deploy-staging.md for why
+      # .env.production lives inside the app root instead of /etc/saw/.
+      - name: Sync source tree (API build/migrate happens on the VPS itself)
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='**/node_modules' \
+            --exclude='apps/api/.env.production' \
+            --exclude='apps/api/storage' \
+            --exclude='apps/api/uploads' \
+            --exclude='admin-site' \
+            --exclude='family-site' \
+            --exclude='control-site' \
+            --exclude='site' \
+            --exclude='.env' \
+            ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
+
+      - name: Sync built web apps
+        run: |
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy_key" apps/web-admin/dist/   "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/admin-site/"
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy_key" apps/web-family/dist/  "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/family-site/"
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy_key" apps/web-control/dist/ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/control-site/"
+
+      - name: Build API, migrate, restart — on the VPS, correct architecture
+        run: |
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" '
+            set -euo pipefail
+            cd '"$DEPLOY_PATH"'
+            pnpm install --frozen-lockfile
+            pnpm --filter @saw/api build
+            set -a; source apps/api/.env.production; set +a
+            pnpm db:migrate
+            sudo systemctl restart saw-api
+            sleep 3
+            sudo systemctl is-active saw-api
+            curl -fsS http://127.0.0.1:3001/health
+          '
+
+      - name: Record deployed commit
+        run: |
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+            "echo '${{ github.sha }}' > $DEPLOY_PATH/.deployed-sha"
 

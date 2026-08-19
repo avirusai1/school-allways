@@ -2,7 +2,6 @@ import 'package:core_auth/core_auth.dart';
 import 'package:core_network/core_network.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -17,41 +16,51 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _controller = TextEditingController();
+  final _email = TextEditingController();
+  final _password = TextEditingController();
   var _loading = false;
   String? _error;
 
   @override
   void dispose() {
-    _controller.dispose();
+    _email.dispose();
+    _password.dispose();
     super.dispose();
   }
 
-  Future<void> _sendOtp() async {
-    final digits = _controller.text.replaceAll(RegExp(r'\D'), '');
-    if (digits.length != 10) {
-      setState(() => _error = 'Enter a valid 10-digit mobile number');
+  Future<void> _submit() async {
+    if (_email.text.trim().isEmpty || _password.text.isEmpty) {
+      setState(() => _error = 'Enter email and password');
       return;
     }
-    final phone = '+91$digits';
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final result = await ref.read(authRepositoryProvider).requestOtp(phone);
-      ref.read(loginFlowProvider.notifier)
-        ..setPhone(phone)
-        ..setOtpMeta(
-          resendAfterSeconds: result.resendAfterSeconds,
-          devOtp: result.devOtp,
-        );
+      final result = await ref.read(authRepositoryProvider).passwordLogin(
+            _email.text.trim(),
+            _password.text,
+          );
+      ref.read(loginFlowProvider.notifier).setTenants(result.tenants);
       if (!mounted) return;
-      context.go(AdminRoutes.otp);
+      if (result.requiresTenantSelection || result.tenants.length > 1) {
+        context.go(AdminRoutes.selectSchool);
+        return;
+      }
+      if (result.tenants.length == 1) {
+        await ref
+            .read(authRepositoryProvider)
+            .selectTenant(result.tenants.first.id);
+      }
+      final session = await ref.read(authRepositoryProvider).fetchSession();
+      await ref.read(sessionProvider.notifier).setSession(session);
+      if (!mounted) return;
+      context.go(AdminRoutes.home);
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (_) {
-      setState(() => _error = 'Could not send OTP. Try again.');
+      setState(() => _error = 'Could not sign in. Try again.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -63,68 +72,49 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Scaffold(
       backgroundColor: t.appBackground,
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: ListView(
           padding: const EdgeInsets.all(AppSpacing.s6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: AppSpacing.s16),
-              Text(
-                'School All Ways',
-                style: AppTypography.h1(color: t.accent),
-              ),
-              Text(
-                'Staff',
-                style: AppTypography.caption(color: t.textTertiary),
-              ),
-              const SizedBox(height: AppSpacing.s8),
-              Text('Sign in', style: AppTypography.display(color: t.textPrimary)),
-              const SizedBox(height: AppSpacing.s2),
-              Text(
-                'Use the mobile number registered with your school',
-                style: AppTypography.bodySmall(color: t.textTertiary),
-              ),
-              const SizedBox(height: AppSpacing.s8),
-              AppTextField(
-                label: 'Mobile number',
-                controller: _controller,
-                keyboardType: TextInputType.phone,
-                errorText: _error,
-                hint: '98765 43210',
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
-                ],
-                prefix: Container(
-                  margin: const EdgeInsets.only(right: AppSpacing.s2),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.s3,
-                    vertical: AppSpacing.s2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: t.surfaceAlt,
-                    borderRadius: AppRadius.borderSm,
-                  ),
-                  child: Text('+91', style: AppTypography.body(color: t.textSecondary)),
-                ),
-                onSubmitted: (_) => _sendOtp(),
-              ),
-              const SizedBox(height: AppSpacing.s6),
-              AppButton(
-                label: 'Send OTP',
-                expanded: true,
-                loading: _loading,
-                onPressed: _loading ? null : _sendOtp,
-              ),
-              const SizedBox(height: AppSpacing.s3),
-              AppButton(
-                label: 'Sign in with email',
-                variant: AppButtonVariant.ghost,
-                expanded: true,
-                onPressed: () => context.go(AdminRoutes.emailLogin),
-              ),
-            ],
-          ),
+          children: [
+            const SizedBox(height: AppSpacing.s16),
+            Text(
+              'School All Ways',
+              style: AppTypography.h1(color: t.accent),
+            ),
+            Text(
+              'Staff',
+              style: AppTypography.caption(color: t.textTertiary),
+            ),
+            const SizedBox(height: AppSpacing.s8),
+            Text('Sign in', style: AppTypography.display(color: t.textPrimary)),
+            const SizedBox(height: AppSpacing.s2),
+            Text(
+              'Use the email your school invited',
+              style: AppTypography.bodySmall(color: t.textTertiary),
+            ),
+            const SizedBox(height: AppSpacing.s8),
+            AppTextField(
+              label: 'Email',
+              controller: _email,
+              keyboardType: TextInputType.emailAddress,
+              autofillHints: const [AutofillHints.email],
+            ),
+            const SizedBox(height: AppSpacing.s4),
+            AppTextField(
+              label: 'Password',
+              controller: _password,
+              obscureText: true,
+              errorText: _error,
+              autofillHints: const [AutofillHints.password],
+              onSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: AppSpacing.s6),
+            AppButton(
+              label: 'Sign in',
+              expanded: true,
+              loading: _loading,
+              onPressed: _loading ? null : _submit,
+            ),
+          ],
         ),
       ),
     );

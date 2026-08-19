@@ -111,6 +111,8 @@ export class StudentsRepository {
     const [row] = await tx
       .select({
         id: students.id,
+        userId: students.userId,
+        branchId: students.branchId,
         admissionNo: students.admissionNo,
         firstName: students.firstName,
         middleName: students.middleName,

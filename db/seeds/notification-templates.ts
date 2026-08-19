@@ -119,6 +119,19 @@ export const NOTIFICATION_TEMPLATES: NotificationTemplateSeed[] = [
     variables: ['studentName'],
   },
 
+  // --- Onboarding: student invitation --------------------------------------
+  {
+    code: 'STUDENT_INVITE',
+    channel: 'email',
+    subject: 'You are invited to School All Ways — {{schoolName}}',
+    body:
+      'Hello {{name}},\n\n' +
+      '{{schoolName}} has invited you to School All Ways.\n\n' +
+      'Open this link to set your password and sign in:\n{{link}}\n\n' +
+      'If you were not expecting this, you can ignore this email.',
+    variables: ['schoolName', 'link', 'name'],
+  },
+
   // --- Attendance: absence alert (B3) --------------------------------------
   //
   // The promise made on the last screen of onboarding. High priority, so an

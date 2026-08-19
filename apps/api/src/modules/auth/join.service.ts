@@ -15,8 +15,10 @@ import {
   students,
   tenants,
   userTenantMemberships,
+  users,
 } from '@saw/db';
 
+import { hashPassword, MIN_PASSWORD_LENGTH } from '../../common/auth/password.util';
 import { RequestContextStore } from '../../common/context/request-context';
 import { TenantDbService, type Tx } from '../../common/database/tenant-db.service';
 import { ApiException } from '../../common/errors/api.exception';
@@ -25,6 +27,21 @@ import { sha256 } from '../../common/utils/crypto.util';
 import { publicFileUrl } from '../../common/utils/url.util';
 import { AuthService } from './auth.service';
 import type { JoinResponseDto, JoinStudentDto } from './dto/auth.response';
+
+type JoinTokenRow = {
+  id: string;
+  tenantId: string;
+  branchId: string | null;
+  purpose: string;
+  studentId: string | null;
+  userId: string | null;
+  expiresAt: Date;
+  consumedAt: Date | null;
+};
+
+type InspectResult =
+  | { kind: 'closed'; response: JoinResponseDto }
+  | { kind: 'open'; token: JoinTokenRow; schoolName: string };
 
 /**
  * Failed lookups per IP per hour. Matches OTP's IP ceiling, because guessing
@@ -49,7 +66,80 @@ export class JoinService {
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
-  async join(rawToken: string): Promise<JoinResponseDto> {
+  /**
+   * Validate the link and name the school. Does not consume the token or
+   * issue a session — the UI uses this to say "Welcome to Sunrise Public
+   * School" before asking for a password.
+   */
+  async preview(rawToken: string): Promise<JoinResponseDto> {
+    const found = await this.inspect(rawToken);
+    if (found.kind === 'closed') return found.response;
+    return this.welcomePayload(found.token, found.schoolName, 'pending');
+  }
+
+  /**
+   * Re-validate, hash the password onto the invited user, then consume the
+   * token / activate membership / issue a session — the sequence `join()`
+   * used to do in one shot.
+   */
+  async activate(rawToken: string, password: string): Promise<JoinResponseDto> {
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      throw new ApiException(
+        400,
+        'VALIDATION_FAILED',
+        `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+      );
+    }
+
+    const found = await this.inspect(rawToken);
+    if (found.kind === 'closed') return found.response;
+
+    const { token, schoolName } = found;
+    const passwordHash = await hashPassword(password);
+
+    await this.db.asTenant(token.tenantId, async (tx) => {
+      await tx
+        .update(users)
+        .set({
+          passwordHash,
+          emailVerifiedAt: new Date(),
+          failedLoginCount: 0,
+          lockedUntil: null,
+        })
+        .where(eq(users.id, token.userId!));
+
+      await tx
+        .update(joinTokens)
+        .set({ consumedAt: new Date() })
+        .where(and(eq(joinTokens.id, token.id), eq(joinTokens.tenantId, token.tenantId)));
+
+      // `listActiveMemberships` filters on 'active', so without this flip the
+      // session we are about to issue would carry no school at all.
+      await tx
+        .update(userTenantMemberships)
+        .set({ status: 'active', joinedAt: new Date() })
+        .where(
+          and(
+            eq(userTenantMemberships.tenantId, token.tenantId),
+            eq(userTenantMemberships.userId, token.userId!),
+            eq(userTenantMemberships.status, 'invited'),
+          ),
+        );
+    });
+
+    const auth = await this.auth.issueSessionForVerifiedUser(token.userId!);
+    await this.writeAudit(
+      token.tenantId,
+      token.branchId,
+      token.userId!,
+      token.id,
+      token.purpose,
+    );
+
+    return this.welcomePayload(token, schoolName, 'joined', auth);
+  }
+
+  private async inspect(rawToken: string): Promise<InspectResult> {
     const ctx = RequestContextStore.peek();
     await this.assertNotFlooding(ctx?.ip);
 
@@ -60,67 +150,56 @@ export class JoinService {
     // confirm that a token exists.
     if (!token || !token.userId || token.purpose === 'signup_handoff') {
       await this.countFailure(ctx?.ip);
-      return { status: 'invalid' };
+      return { kind: 'closed', response: { status: 'invalid' } };
     }
 
     const schoolName = await this.schoolName(token.tenantId);
 
     if (token.expiresAt.getTime() < Date.now()) {
-      return { status: 'expired', schoolName };
+      return { kind: 'closed', response: { status: 'expired', schoolName } };
     }
 
     if (token.consumedAt) {
       // Not a failure. The parent opened the message on a second device, or
       // tapped it twice. The app sends them to the normal login screen.
-      return { status: 'already_activated', schoolName };
+      return { kind: 'closed', response: { status: 'already_activated', schoolName } };
     }
 
-    await this.db.asTenant(token.tenantId, async (tx) => {
-      await tx
-        .update(joinTokens)
-        .set({ consumedAt: new Date() })
-        .where(and(eq(joinTokens.id, token.id), eq(joinTokens.tenantId, token.tenantId)));
+    return { kind: 'open', token, schoolName };
+  }
 
-      // `listActiveMemberships` filters on 'active', so without this flip the
-      // session we are about to issue would carry no school at all.
-      await tx
-        .update(userTenantMemberships)
-        .set({ status: 'active' })
-        .where(
-          and(
-            eq(userTenantMemberships.tenantId, token.tenantId),
-            eq(userTenantMemberships.userId, token.userId!),
-            eq(userTenantMemberships.status, 'invited'),
-          ),
-        );
-    });
-
-    const auth = await this.auth.issueSessionForVerifiedUser(token.userId);
-    await this.writeAudit(
-      token.tenantId,
-      token.branchId,
-      token.userId,
-      token.id,
-      token.purpose,
-    );
-
+  private async welcomePayload(
+    token: JoinTokenRow,
+    schoolName: string,
+    status: 'pending' | 'joined',
+    auth?: JoinResponseDto['auth'],
+  ): Promise<JoinResponseDto> {
     if (token.purpose === 'staff_invite') {
-      const member = await this.staffFor(token.tenantId, token.userId);
+      const member = await this.staffFor(token.tenantId, token.userId!);
       return {
-        status: 'joined',
+        status,
         purpose: 'staff_invite',
         schoolName,
-        auth,
+        ...(auth ? { auth } : {}),
         ...(member ? { staff: member } : {}),
       };
     }
 
+    if (token.purpose === 'student_invite') {
+      return {
+        status,
+        purpose: 'student_invite',
+        schoolName,
+        ...(auth ? { auth } : {}),
+      };
+    }
+
     return {
-      status: 'joined',
+      status,
       purpose: 'parent_profile',
       schoolName,
-      auth,
-      students: await this.studentsFor(token.tenantId, token.userId, token.studentId),
+      ...(auth ? { auth } : {}),
+      students: await this.studentsFor(token.tenantId, token.userId!, token.studentId),
     };
   }
 

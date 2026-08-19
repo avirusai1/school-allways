@@ -136,7 +136,7 @@ export const envSchema = z
           path: ['GMAIL_USER'],
           message:
             'Production needs a funded delivery channel. Configure GMAIL_USER and ' +
-            'GMAIL_APP_PASSWORD (email OTP / invites), or implement a real SMS gateway. ' +
+            'GMAIL_APP_PASSWORD (invite emails), or implement a real SMS gateway. ' +
             'Booting with only the logging stub would accept logins and invitations and ' +
             'quietly drop them.',
         });

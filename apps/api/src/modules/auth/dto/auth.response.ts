@@ -68,10 +68,10 @@ export class JoinStaffDto {
  * means an attacker probing tokens cannot tell the cases apart by status code.
  */
 export class JoinResponseDto {
-  status!: 'invalid' | 'expired' | 'already_activated' | 'joined';
+  status!: 'invalid' | 'expired' | 'already_activated' | 'pending' | 'joined';
   /** Absent for `invalid` — we have no row, so we know of no school to name. */
   schoolName?: string;
-  purpose?: 'parent_profile' | 'staff_invite' | 'signup_handoff';
+  purpose?: 'parent_profile' | 'staff_invite' | 'student_invite' | 'signup_handoff';
   auth?: AuthTokensResponseDto;
   students?: JoinStudentDto[];
   staff?: JoinStaffDto;

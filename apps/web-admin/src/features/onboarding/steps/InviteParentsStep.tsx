@@ -40,8 +40,8 @@ export const InviteParentsStep = forwardRef<InviteStepHandle, Props>(
     if (parents.eligible === 0 && parents.invited === 0) {
       return (
         <EmptyState
-          headline="No parents with a mobile number yet"
-          body="Import your students first — guardian phone numbers come in with them — or skip and invite later."
+          headline="No parents with an email yet"
+          body="Import your students first — guardian emails come in with them — or skip and invite later."
         />
       );
     }
@@ -68,7 +68,7 @@ export const InviteParentsStep = forwardRef<InviteStepHandle, Props>(
     return (
       <div className="flex flex-col gap-5">
         <p className="text-body text-grey-900">
-          {parents.eligible} parents have a mobile number on file
+          {parents.eligible} parents have an email on file
         </p>
 
         <label className="flex items-start gap-2 text-body-small text-grey-900">
@@ -78,14 +78,14 @@ export const InviteParentsStep = forwardRef<InviteStepHandle, Props>(
             checked={optIn}
             onChange={(e) => setOptIn(e.target.checked)}
           />
-          Send an invitation by WhatsApp and SMS
+          Send an invitation by email
         </label>
 
         <div>
           <p className="text-body-small text-grey-600">Preview:</p>
           <p className="mt-1 rounded-md border border-grey-200 bg-grey-25 px-4 py-3 text-body-small text-grey-900">
-            {schoolName} has invited you to School All Ways. Tap to set up your
-            account: saw.link/j/a4f2
+            {schoolName} has invited you to School All Ways. Open the link in
+            your email to set your password.
           </p>
           <p className="mt-2 text-body-small text-grey-600">
             Parents will be asked to add their child&rsquo;s address and photo.

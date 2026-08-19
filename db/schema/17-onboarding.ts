@@ -67,12 +67,13 @@ export const joinTokens = pgTable(
     /** SHA-256 of the opaque token shown in the URL. */
     tokenHash: varchar('token_hash', { length: 64 }).notNull(),
     /**
-     * 'parent_profile' | 'staff_invite' | 'signup_handoff'
+     * 'parent_profile' | 'staff_invite' | 'student_invite' | 'signup_handoff'
      *
-     * The first two are invitations sent to a phone. The third is the
-     * cross-origin handover from the public signup form to the admin app —
-     * structurally identical (opaque, hashed, single-use, expiring), so it
-     * lives here rather than in a second table with its own security posture.
+     * The first three are email invitations that land on /join/:token and
+     * ask the person to set a password. The fourth is the cross-origin
+     * handover from the public signup form to the admin app — structurally
+     * identical (opaque, hashed, single-use, expiring), so it lives here
+     * rather than in a second table with its own security posture.
      */
     purpose: varchar('purpose', { length: 30 }).notNull(),
 

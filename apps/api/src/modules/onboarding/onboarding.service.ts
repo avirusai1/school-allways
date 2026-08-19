@@ -61,11 +61,11 @@ const PROGRESS_KEY = 'onboarding.progress';
  * configured for CORS rather than adding a third way to say where the web apps
  * live.
  */
-function joinBaseFor(purpose: 'parent_profile' | 'staff_invite'): string {
+function joinBaseFor(purpose: 'parent_profile' | 'staff_invite' | 'student_invite'): string {
   const family =
     process.env.FAMILY_WEB_URL ?? 'https://family.school.techallways.com';
   const admin = process.env.ADMIN_WEB_URL ?? 'https://admin.school.techallways.com';
-  return `${(purpose === 'parent_profile' ? family : admin).replace(/\/+$/, '')}/join`;
+  return `${(purpose === 'staff_invite' ? admin : family).replace(/\/+$/, '')}/join`;
 }
 
 @Injectable()
@@ -397,6 +397,8 @@ export class OnboardingService {
         .selectDistinct({
           userId: userTenantMemberships.userId,
           phone: users.phone,
+          email: users.email,
+          workEmail: staff.workEmail,
           fullName: users.fullName,
         })
         .from(userTenantMemberships)
@@ -422,10 +424,23 @@ export class OnboardingService {
         );
       }
 
+      const eligible = memberships.filter((m) => m.email || m.workEmail);
+
+      // Notification dispatch reads users.email. Copy work email onto the
+      // login row when the import left it blank, so the invite can actually
+      // leave the building.
+      const missingLoginEmail = eligible.filter((m) => !m.email && m.workEmail);
+      for (const m of missingLoginEmail) {
+        const workEmail = m.workEmail!.trim().toLowerCase();
+        await tx
+          .update(users)
+          .set({ email: workEmail })
+          .where(and(eq(users.id, m.userId), isNull(users.email)));
+        m.email = workEmail;
+      }
+
       const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-      const invites = memberships
-        .filter((m) => m.phone)
-        .map((m) => ({ ...m, token: generateOpaqueToken() }));
+      const invites = eligible.map((m) => ({ ...m, token: generateOpaqueToken() }));
 
       if (invites.length) {
         // One statement, not one per teacher — a 60-staff school was issuing 60
@@ -458,7 +473,7 @@ export class OnboardingService {
       {
         tenantId,
         templateCode: 'STAFF_INVITE',
-        channels: ['email', 'sms', 'in_app'],
+        channels: ['email'],
         label: 'Staff',
         purpose: 'staff_invite',
       },
@@ -476,6 +491,24 @@ export class OnboardingService {
    * link in per-recipient variables, so 400 parents cost one queue write rather
    * than 400 — and one failure mode instead of 400 independent ones.
    */
+  async dispatchJoinInvites(
+    recipients: Array<{
+      userId: string | null;
+      studentId?: string | null;
+      token: string;
+      variables: Record<string, string>;
+    }>,
+    opts: {
+      tenantId: string;
+      templateCode: string;
+      channels: Array<'email' | 'sms' | 'whatsapp' | 'in_app' | 'push'>;
+      label: string;
+      purpose: 'parent_profile' | 'staff_invite' | 'student_invite';
+    },
+  ): Promise<number> {
+    return this.fanOutInvites(recipients, opts);
+  }
+
   private async fanOutInvites(
     recipients: Array<{
       userId: string | null;
@@ -488,7 +521,7 @@ export class OnboardingService {
       templateCode: string;
       channels: Array<'email' | 'sms' | 'whatsapp' | 'in_app' | 'push'>;
       label: string;
-      purpose: 'parent_profile' | 'staff_invite';
+      purpose: 'parent_profile' | 'staff_invite' | 'student_invite';
     },
   ): Promise<number> {
     const addressable = recipients.filter((r) => r.userId);
@@ -553,7 +586,7 @@ export class OnboardingService {
           and(
             eq(userTenantMemberships.tenantId, tenantId),
             eq(userTenantMemberships.status, 'invited'),
-            sql`${users.phone} is not null`,
+            sql`coalesce(${users.email}, ${staff.workEmail}) is not null`,
           ),
         );
 
@@ -567,7 +600,7 @@ export class OnboardingService {
           and(
             eq(staff.tenantId, tenantId),
             isNull(staff.userId),
-            sql`coalesce(${staff.workPhone}, ${staff.personalPhone}) is not null`,
+            sql`${staff.workEmail} is not null`,
           ),
         );
 
@@ -624,7 +657,7 @@ export class OnboardingService {
           and(
             eq(studentEnrollments.tenantId, tenantId),
             inArray(studentEnrollments.status, ['active', 'admitted']),
-            sql`${guardians.phone} is not null`,
+            sql`${guardians.email} is not null`,
             notSample,
           ),
         )
@@ -727,7 +760,7 @@ export class OnboardingService {
       const enrollmentConds = [
         eq(studentEnrollments.tenantId, tenantId),
         inArray(studentEnrollments.status, ['active', 'admitted']),
-        // Never SMS demo sample guardians.
+        // Never invite sample guardians.
         sql`coalesce((${students.customFields}->>'isSample')::boolean, false) = false`,
       ];
       if (dto.guardianIds?.length) {
@@ -747,6 +780,7 @@ export class OnboardingService {
           studentId: students.id,
           guardianUserId: guardians.userId,
           phone: guardians.phone,
+          email: guardians.email,
           firstName: students.firstName,
         })
         .from(studentEnrollments)
@@ -761,10 +795,31 @@ export class OnboardingService {
         .innerJoin(guardians, eq(guardians.id, studentGuardians.guardianId))
         .where(and(...enrollmentConds));
 
+      const eligible = rows.filter((r) => r.email);
+      const userIds = [
+        ...new Set(eligible.map((r) => r.guardianUserId).filter((id): id is string => Boolean(id))),
+      ];
+      if (userIds.length) {
+        // Dispatch reads users.email. Copy the guardian contact email onto the
+        // login row when import left it blank. One statement — a 400-parent
+        // year-group must not be 400 round trips.
+        await tx.execute(sql`
+          update users as u
+          set email = lower(g.email)
+          from guardians g
+          where g.user_id = u.id
+            and g.tenant_id = ${tenantId}
+            and u.email is null
+            and g.email is not null
+            and u.id in (${sql.join(
+              userIds.map((id) => sql`${id}::uuid`),
+              sql`, `,
+            )})
+        `);
+      }
+
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-      const invites = rows
-        .filter((r) => r.phone)
-        .map((r) => ({ ...r, token: generateOpaqueToken() }));
+      const invites = eligible.map((r) => ({ ...r, token: generateOpaqueToken() }));
 
       if (invites.length) {
         // A 400-student section was previously one INSERT per child.
@@ -785,8 +840,8 @@ export class OnboardingService {
       return invites;
     });
 
-    // Guardians without a user account still get a token — the SMS worker can
-    // reach them by phone later — so they count as invited but are skipped here.
+    // Guardians without a user account still get a token but cannot be emailed
+    // until a login row exists — they count as invited and are skipped here.
     const queued = await this.fanOutInvites(
       pending.map((i) => ({
         userId: i.guardianUserId,
@@ -797,7 +852,7 @@ export class OnboardingService {
       {
         tenantId,
         templateCode: 'PARENT_PROFILE_INVITE',
-        channels: ['email', 'sms', 'whatsapp', 'in_app'],
+        channels: ['email'],
         label: 'Parent',
         purpose: 'parent_profile',
       },

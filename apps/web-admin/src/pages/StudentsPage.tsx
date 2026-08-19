@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   Avatar,
+  Button,
   DataTable,
   EmptyState,
   ErrorState,
@@ -12,7 +13,7 @@ import {
 } from '@saw/ui';
 import { studentListItemSchema, type StudentListItem } from '@saw/shared-types';
 import { z } from 'zod';
-import { apiFetch } from '../lib/api';
+import { apiFetch, ApiError } from '../lib/api';
 
 const pageSchema = z.object({
   data: z.array(studentListItemSchema),
@@ -22,6 +23,9 @@ const pageSchema = z.object({
 export function StudentsPage() {
   const [q, setQ] = useState('');
   const [density, setDensity] = useState<'compact' | 'comfortable'>('compact');
+  const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   const query = useQuery({
     queryKey: ['students', q],
@@ -32,6 +36,23 @@ export function StudentsPage() {
       return pageSchema.parse(raw);
     },
     staleTime: 5 * 60 * 1000,
+  });
+
+  const invite = useMutation({
+    mutationFn: async ({ id, email }: { id: string; email: string }) => {
+      return apiFetch(`/students/${id}/invite`, {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      });
+    },
+    onSuccess: () => {
+      setInvitingId(null);
+      setInviteEmail('');
+      setInviteError(null);
+    },
+    onError: (err) => {
+      setInviteError(err instanceof ApiError ? err.message : 'Could not send invite.');
+    },
   });
 
   const columns = useMemo<DataTableColumn<StudentListItem>[]>(
@@ -63,8 +84,55 @@ export function StudentsPage() {
         numeric: true,
         cell: (row) => row.rollNo ?? '—',
       },
+      {
+        id: 'invite',
+        header: 'Login',
+        cell: (row) =>
+          invitingId === row.id ? (
+            <form
+              className="flex min-w-[220px] items-end gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                invite.mutate({ id: row.id, email: inviteEmail.trim() });
+              }}
+            >
+              <TextField
+                label="Student email"
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                required
+              />
+              <Button type="submit" loading={invite.isPending}>
+                Send
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setInvitingId(null);
+                  setInviteError(null);
+                }}
+              >
+                Cancel
+              </Button>
+            </form>
+          ) : (
+            <button
+              type="button"
+              className="text-[13px] font-medium text-blue-600 hover:underline"
+              onClick={() => {
+                setInvitingId(row.id);
+                setInviteEmail('');
+                setInviteError(null);
+              }}
+            >
+              Invite
+            </button>
+          ),
+      },
     ],
-    [],
+    [invitingId, inviteEmail, invite.isPending],
   );
 
   return (
@@ -105,6 +173,12 @@ export function StudentsPage() {
       </div>
 
       <div className="mt-4">
+        {inviteError && (
+          <p className="mb-3 text-body-small text-red-700">{inviteError}</p>
+        )}
+        {invite.isSuccess && !invitingId && (
+          <p className="mb-3 text-body-small text-grey-700">Invite sent.</p>
+        )}
         {query.isPending && <Skeleton height={256} className="w-full" />}
         {query.isError && (
           <ErrorState

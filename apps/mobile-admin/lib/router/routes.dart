@@ -1,9 +1,8 @@
 abstract final class AdminRoutes {
   static const splash = '/';
   static const login = '/login';
-  static const otp = '/login/otp';
-  static const emailLogin = '/login/email';
   static const selectSchool = '/select-school';
+  static const joinPrefix = '/join';
 
   static const home = '/home';
   static const attendance = '/attendance';

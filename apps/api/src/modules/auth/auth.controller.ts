@@ -16,6 +16,7 @@ import {
 } from '../../common/rbac/permission.decorator';
 import { AuthService } from './auth.service';
 import { JoinService } from './join.service';
+import { ActivateJoinDto } from './dto/activate-join.dto';
 import { PasswordLoginDto } from './dto/password-login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RequestOtpDto } from './dto/request-otp.dto';
@@ -48,15 +49,27 @@ export class AuthController {
   }
 
   /**
+   * Preview an invitation. Returns school name so the UI can welcome the
+   * person before asking them to set a password. Does not issue a session.
+   * Declare `/activate` first so Nest does not treat "activate" as a token.
+   */
+  @Public()
+  @Post('join/:token/activate')
+  @HttpCode(HttpStatus.OK)
+  activate(@Param('token') token: string, @Body() dto: ActivateJoinDto) {
+    return this.join_.activate(token, dto.password);
+  }
+
+  /**
    * The token in the URL is the credential — there is no session yet, which is
-   * the whole point of an invitation link. All four outcomes come back 200 with
-   * a `status`; see JoinResponseDto for why.
+   * the whole point of an invitation link. Outcomes come back 200 with a
+   * `status`; see JoinResponseDto for why.
    */
   @Public()
   @Post('join/:token')
   @HttpCode(HttpStatus.OK)
-  join(@Param('token') token: string) {
-    return this.join_.join(token);
+  preview(@Param('token') token: string) {
+    return this.join_.preview(token);
   }
 
   /**

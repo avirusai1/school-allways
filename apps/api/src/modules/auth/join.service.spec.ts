@@ -1,8 +1,13 @@
-import { joinTokens, userTenantMemberships } from '@saw/db';
+import { joinTokens, userTenantMemberships, users } from '@saw/db';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RequestContextStore } from '../../common/context/request-context';
 import { JoinService } from './join.service';
+
+vi.mock('../../common/auth/password.util', () => ({
+  hashPassword: vi.fn(async () => 'argon2-hash'),
+  MIN_PASSWORD_LENGTH: 12,
+}));
 
 /**
  * The token row the lookup finds. Individual tests override what they care
@@ -77,7 +82,7 @@ describe('JoinService', () => {
   it('reports an unknown token as invalid without saying so', async () => {
     lookupRows = [];
 
-    const res = await service.join('nope');
+    const res = await service.preview('nope');
 
     expect(res.status).toBe('invalid');
     // No school named, no hint that the token space was probed successfully.
@@ -88,7 +93,7 @@ describe('JoinService', () => {
   it('reports an expired token separately so the UI can offer a resend', async () => {
     lookupRows = [tokenRow({ expiresAt: new Date(Date.now() - 1000) })];
 
-    const res = await service.join('old');
+    const res = await service.preview('old');
 
     expect(res.status).toBe('expired');
     expect(auth.issueSessionForVerifiedUser).not.toHaveBeenCalled();
@@ -98,7 +103,7 @@ describe('JoinService', () => {
   it('treats a second tap as already activated, not as an error', async () => {
     lookupRows = [tokenRow({ consumedAt: new Date() })];
 
-    const res = await service.join('again');
+    const res = await service.preview('again');
 
     expect(res.status).toBe('already_activated');
     // Nothing re-consumed, and no second session handed out.
@@ -106,15 +111,47 @@ describe('JoinService', () => {
     expect(auth.issueSessionForVerifiedUser).not.toHaveBeenCalled();
   });
 
-  it('consumes the token, activates the membership and issues a session', async () => {
+  it('preview names the school without consuming the token or issuing a session', async () => {
     lookupRows = [tokenRow()];
 
-    const res = await service.join('good');
+    const res = await service.preview('good');
+
+    expect(res.status).toBe('pending');
+    expect(res.schoolName).toBeDefined();
+    expect(res.auth).toBeUndefined();
+    expect(updated).toHaveLength(0);
+    expect(auth.issueSessionForVerifiedUser).not.toHaveBeenCalled();
+  });
+
+  it('activate writes the password, consumes the token and issues a session', async () => {
+    lookupRows = [tokenRow()];
+
+    const res = await service.activate('good', 'A-strong-pass');
 
     expect(res.status).toBe('joined');
     expect(res.auth).toEqual({ accessToken: 'jwt' });
-    // Both writes, in the same tenant-scoped transaction.
-    expect(updated).toEqual([joinTokens, userTenantMemberships]);
+    // Password, token consume, membership flip — same tenant-scoped transaction.
+    expect(updated).toEqual([users, joinTokens, userTenantMemberships]);
+    expect(auth.issueSessionForVerifiedUser).toHaveBeenCalledWith('user-1');
+  });
+
+  it('activate works for a parent_profile token the same way', async () => {
+    lookupRows = [tokenRow({ purpose: 'parent_profile' })];
+
+    const res = await service.activate('parent-link', 'A-strong-pass');
+
+    expect(res.status).toBe('joined');
+    expect(res.purpose).toBe('parent_profile');
+    expect(auth.issueSessionForVerifiedUser).toHaveBeenCalledWith('user-1');
+  });
+
+  it('activate works for a student_invite token the same way', async () => {
+    lookupRows = [tokenRow({ purpose: 'student_invite', studentId: 'stu-1' })];
+
+    const res = await service.activate('student-link', 'A-strong-pass');
+
+    expect(res.status).toBe('joined');
+    expect(res.purpose).toBe('student_invite');
     expect(auth.issueSessionForVerifiedUser).toHaveBeenCalledWith('user-1');
   });
 
@@ -123,20 +160,20 @@ describe('JoinService', () => {
     // can exist with a null user. There is nobody to log in as.
     lookupRows = [tokenRow({ userId: null })];
 
-    const res = await service.join('orphan');
+    const res = await service.preview('orphan');
 
     expect(res.status).toBe('invalid');
   });
 
   it('counts only failures towards the flood limit', async () => {
     lookupRows = [];
-    await service.join('nope');
+    await service.preview('nope');
     expect(redis.incr).toHaveBeenCalledTimes(1);
 
     vi.clearAllMocks();
     redis.get.mockResolvedValue('0');
     lookupRows = [tokenRow()];
-    await service.join('good');
+    await service.preview('good');
     // A school's parents all opening their links at once must not lock the
     // shared wifi out of the endpoint.
     expect(redis.incr).not.toHaveBeenCalled();
@@ -145,7 +182,7 @@ describe('JoinService', () => {
   it('will not let a signup handoff code open an invitation', async () => {
     lookupRows = [tokenRow({ purpose: 'signup_handoff' })];
 
-    const res = await service.join('handoff-code');
+    const res = await service.preview('handoff-code');
 
     // Same opaque answer as an unknown token: the two doors are not
     // interchangeable, and saying so would confirm the code exists.
@@ -186,6 +223,9 @@ describe('JoinService', () => {
     redis.get.mockResolvedValue(String(10));
     redis.ttl.mockResolvedValue(600);
 
-    await expect(service.join('guess')).rejects.toMatchObject({ code: 'RATE_LIMITED' });
+    await expect(service.preview('guess')).rejects.toMatchObject({ code: 'RATE_LIMITED' });
+    await expect(service.activate('guess', 'A-strong-pass')).rejects.toMatchObject({
+      code: 'RATE_LIMITED',
+    });
   });
 });

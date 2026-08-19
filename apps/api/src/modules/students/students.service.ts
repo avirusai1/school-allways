@@ -6,10 +6,13 @@ import {
   auditLogs,
   classes,
   guardians,
+  joinTokens,
+  roles,
   sections,
   studentEnrollments,
   studentGuardians,
   students,
+  userRoleAssignments,
   userTenantMemberships,
   users,
 } from '@saw/db';
@@ -23,10 +26,13 @@ import { TenantDbService, type Tx } from '../../common/database/tenant-db.servic
 import { ApiException } from '../../common/errors/api.exception';
 import { decodeCursor, encodeCursor, type Page } from '../../common/pagination';
 import { scopeFilter, assertInScope } from '../../common/rbac/scope.util';
+import { generateOpaqueToken, sha256 } from '../../common/utils/crypto.util';
 import { normalizePhone } from '../import/import.util';
+import { OnboardingService } from '../onboarding/onboarding.service';
 import { parseImportFile } from '../import/parsers/csv.parser';
 import { StudentsRepository } from './students.repository';
 import type { CreateStudentDto } from './dto/create-student.dto';
+import type { InviteStudentDto } from './dto/invite-student.dto';
 import type { IssueGuardianAccountDto } from './dto/issue-guardian-account.dto';
 import type { ListPendingGuardiansQuery } from './dto/list-pending-guardians.query';
 import type { ListStudentsQuery } from './dto/list-students.query';
@@ -44,6 +50,7 @@ export class StudentsService {
     private readonly config: ConfigService,
     private readonly db: TenantDbService,
     private readonly repo: StudentsRepository,
+    private readonly onboarding: OnboardingService,
   ) {}
 
   async list(
@@ -240,6 +247,192 @@ export class StudentsService {
 
       return { id: created.id };
     });
+  }
+
+  /**
+   * Email invite for a student login. Email is entered at invite time (schools
+   * often do not have a student address on the record). Creates the `users`
+   * row if needed, assigns the `student` role (`self` scope), and fans the
+   * join link out by email.
+   */
+  async inviteStudent(
+    studentId: string,
+    dto: InviteStudentDto,
+    grant: GrantedPermission,
+  ) {
+    const ctx = RequestContextStore.get();
+    const email = dto.email.trim().toLowerCase();
+    const sessionId = await this.currentSessionId(ctx.branchId!);
+
+    const pending = await this.db.run(async (tx) => {
+      const row = await this.repo.findById(tx, studentId, sessionId);
+      if (!row) throw new NotFoundException('Student not found');
+      assertInScope(grant, {
+        sectionId: row.sectionId,
+        studentId: row.id,
+      });
+
+      await assertEmailAvailable(tx, email, row.userId);
+
+      const fullName = [row.firstName, row.middleName, row.lastName]
+        .filter(Boolean)
+        .join(' ');
+      const isMinor = isUnder18(row.dateOfBirth);
+
+      let userId = row.userId as string | null;
+      if (userId) {
+        await tx
+          .update(users)
+          .set({ email, kind: 'student', isMinor, isActive: true })
+          .where(eq(users.id, userId));
+      } else {
+        const [created] = await tx
+          .insert(users)
+          .values({
+            email,
+            fullName,
+            displayName: row.firstName,
+            kind: 'student',
+            isMinor,
+            isActive: true,
+          })
+          .returning({ id: users.id });
+        userId = created.id;
+        await tx.update(students).set({ userId }).where(eq(students.id, studentId));
+      }
+
+      await this.ensureStudentMembershipAndRole(tx, {
+        tenantId: ctx.tenantId!,
+        branchId: ctx.branchId ?? row.branchId,
+        userId,
+        academicSessionId: sessionId,
+      });
+
+      const token = generateOpaqueToken();
+      const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      await tx.insert(joinTokens).values({
+        tenantId: ctx.tenantId!,
+        branchId: ctx.branchId ?? null,
+        tokenHash: sha256(token),
+        purpose: 'student_invite',
+        studentId,
+        userId,
+        expiresAt,
+      });
+
+      await tx.insert(auditLogs).values({
+        tenantId: ctx.tenantId!,
+        branchId: ctx.branchId ?? null,
+        actorUserId: ctx.userId,
+        action: 'student.invite.sent',
+        entityType: 'students',
+        entityId: studentId,
+        changes: {
+          email: { from: null, to: email },
+          userId: { from: row.userId, to: userId },
+        },
+        ip: ctx.ip ?? null,
+        userAgent: ctx.userAgent ?? null,
+        requestId: ctx.requestId ?? null,
+      });
+
+      return { token, userId, firstName: row.firstName as string };
+    });
+
+    const queued = await this.onboarding.dispatchJoinInvites(
+      [
+        {
+          userId: pending.userId,
+          studentId,
+          token: pending.token,
+          variables: { name: pending.firstName },
+        },
+      ],
+      {
+        tenantId: ctx.tenantId!,
+        templateCode: 'STUDENT_INVITE',
+        channels: ['email'],
+        label: 'Student',
+        purpose: 'student_invite',
+      },
+    );
+
+    return { invited: 1, queued, studentId, email };
+  }
+
+  private async ensureStudentMembershipAndRole(
+    tx: Tx,
+    opts: {
+      tenantId: string;
+      branchId: string | null;
+      userId: string;
+      academicSessionId: string;
+    },
+  ): Promise<void> {
+    const [membership] = await tx
+      .select({ id: userTenantMemberships.id, status: userTenantMemberships.status })
+      .from(userTenantMemberships)
+      .where(
+        and(
+          eq(userTenantMemberships.tenantId, opts.tenantId),
+          eq(userTenantMemberships.userId, opts.userId),
+        ),
+      )
+      .limit(1);
+
+    if (!membership) {
+      await tx.insert(userTenantMemberships).values({
+        tenantId: opts.tenantId,
+        userId: opts.userId,
+        branchId: opts.branchId,
+        status: 'invited',
+        invitedAt: new Date(),
+      });
+    } else if (membership.status === 'left') {
+      await tx
+        .update(userTenantMemberships)
+        .set({ status: 'invited', invitedAt: new Date(), leftAt: null })
+        .where(eq(userTenantMemberships.id, membership.id));
+    }
+
+    const [studentRole] = await tx
+      .select({ id: roles.id })
+      .from(roles)
+      .where(and(eq(roles.code, 'student'), isNull(roles.tenantId)))
+      .limit(1);
+
+    if (!studentRole) {
+      throw new ApiException(
+        503,
+        'SERVICE_UNAVAILABLE',
+        'The student role is not seeded. Contact support.',
+      );
+    }
+
+    const [existing] = await tx
+      .select({ id: userRoleAssignments.id })
+      .from(userRoleAssignments)
+      .where(
+        and(
+          eq(userRoleAssignments.tenantId, opts.tenantId),
+          eq(userRoleAssignments.userId, opts.userId),
+          eq(userRoleAssignments.roleId, studentRole.id),
+        ),
+      )
+      .limit(1);
+
+    if (!existing) {
+      await tx.insert(userRoleAssignments).values({
+        tenantId: opts.tenantId,
+        userId: opts.userId,
+        roleId: studentRole.id,
+        branchId: opts.branchId,
+        scopeType: 'self',
+        scopeRefs: {},
+        academicSessionId: opts.academicSessionId,
+        isPrimary: true,
+      });
+    }
   }
 
   /**
@@ -813,4 +1006,13 @@ export class StudentsService {
     }
     return sessionId;
   }
+}
+
+function isUnder18(dateOfBirth: string | Date | null | undefined): boolean {
+  if (!dateOfBirth) return true;
+  const birth = typeof dateOfBirth === 'string' ? new Date(`${dateOfBirth}T00:00:00Z`) : dateOfBirth;
+  if (Number.isNaN(birth.getTime())) return true;
+  const cutoff = new Date();
+  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 18);
+  return birth > cutoff;
 }

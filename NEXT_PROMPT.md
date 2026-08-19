@@ -1,448 +1,167 @@
-# Work order — Business model change: free for schools, parent-paid subscriptions
+# Work order — Replace phone+OTP with email invite + password (staff, students, parents)
 # Paste this whole file into a fresh Cursor composer session.
 
-This is the largest single change since the build began. It reverses the
-monetisation model the entire product was priced around. **Read this whole
-file before writing any code**, and stop and ask if anything is ambiguous —
-this touches money, GST, and access control simultaneously.
+**Read this whole file before writing any code.** This changes how every
+human being logs into the platform — staff, students, and parents — and it
+touches auth, RBAC, notifications, and four frontends. Stop and ask if
+anything below is ambiguous; getting login wrong locks real people out.
 
-The tax and Play-policy questions in the previous draft have now been
-researched against primary sources. Findings are stated inline with links.
-**Two of them change the design materially** — see PART G especially.
+## The decision, stated plainly
 
-## The new model, stated plainly
+Abhishek decided (2026-08-18): **email invite + self-service password is
+the only login mechanism for everyone** — staff, students, and parents.
+Phone + OTP login is removed entirely. This reverses the "phone-first by
+design" decision baked into `db/schema/02-identity.ts`'s current header
+comment (written for a real reason — many Indian parents have no email —
+but superseded by this instruction; update that comment when you change
+the behaviour it describes).
 
-- **The platform is free for schools.** No per-school plan pricing, no
-  module gating by plan tier.
-- **Parents pay ₹365 per student per academic session** (₹1/day), GST
-  inclusive. Per student, NOT per family — a parent with three children pays
-  three times; each child unlocks independently.
-- **Schools pay ₹500 + GST per year**, the **Stay Connected Fee**.
-  Non-payment shows a reminder to school admin/headmaster but **blocks
-  nothing**; only a platform admin can suspend a school, and only in a
-  dispute.
-- **Manual cash path:** a school may collect ₹365 cash from a parent and
-  activate that student from the school admin panel. The platform console
-  tracks these per school for invoicing back to the school.
+Phone numbers stay as a **contact field** (SMS/WhatsApp notifications,
+emergency contact, etc.) — this is about removing phone as a **login
+credential**, not deleting the phone column or SMS notifications generally.
 
-## Two hard constraints
+## What already exists — read this before building anything new
 
-**1. Google Play Billing is NOT in this round.** There is no mobile app in
-this repo — the Flutter apps (`build/12-14`) were never built, and Play
-Billing cannot work from a web app. This round builds the entire
-subscription model, enforcement, manual activation, invoicing and console
-billing view. Play integration is Phase 2. Design the schema so Phase 2
-slots in without migration (see the `play_*` columns) but attempt no Play
-integration now.
+A join-token invite system already exists and is most of the way there.
+Do not rebuild it from scratch.
 
-**2. The parent app must NEVER mention or link to the cash path.** This is
-now confirmed against Google's actual policy, not assumed — see PART C.
+- `apps/api/src/modules/auth/join.service.ts` — redeems a token
+  (`join()`), issues a session. Currently handles three purposes:
+  `staff_invite`, `parent_profile`, `signup_handoff`.
+- `apps/api/src/modules/onboarding/onboarding.service.ts` — the only place
+  that currently *creates* `staff_invite` and `parent_profile` tokens,
+  fans them out via `fanOutInvites()`, and it already supports an `email`
+  channel per recipient.
+- `apps/api/src/modules/notifications/providers/gmail.provider.ts` — a
+  real Gmail SMTP provider (nodemailer, not a stub), gated on
+  `GMAIL_USER`/`GMAIL_APP_PASSWORD`. **These env vars are not set anywhere
+  yet — not even in `.env.example`.** No real invite email has ever been
+  sent. Gmail's send limit (~500/day consumer, ~2000/day Workspace) is
+  fine for pilot schools; flag in a comment that this needs to move to
+  SES/Postmark before real scale, don't build that migration now.
+- `guardians` table already has an `email` column (seed data proves it:
+  `db/seeds/demo.ts` sets `email: 'parent@sunrise.demo'`) — parents
+  already have somewhere for an email to live.
+- `students` table already has a nullable `userId` FK to `users`
+  (`db/schema/05-students.ts`), and a `student` system role already
+  exists in `db/seeds/roles.ts`, fully permissioned, currently assigned to
+  nobody. The groundwork for student logins exists; the flow to use it
+  does not.
 
-**Read first:** `.cursorrules`, `db/schema/01-tenancy.ts` (plans,
-subscriptions, `tenantStatusEnum`), `db/schema/05-students.ts`,
-`db/seeds/catalogues.ts`, `apps/api/src/modules/family/family.controller.ts`
-(every endpoint needs the new guard), `apps/api/src/common/rbac/scope.util.ts`
-(the `assertInScope` pattern you will mirror exactly), `db/schema/15-platform.ts`
-(the aggregate-only privacy rule constrains what the console may see).
+## The two real gaps blocking everything
 
----
-
-## PART A — Reverse the school-paid pricing
-
-The previous round set `basic` at ₹250/student/month and `pro` at ₹400.
-Both are now wrong; schools pay nothing per student.
-
-1. **Collapse to a single free plan.** Keep the `plans` table (Phase 2 and
-   future tiers may use it), seed exactly one public plan: code `free`, name
-   "Free", `pricePerStudentYear: 0`, `includedModules` = the **full PRO
-   module set**. Every school gets everything; gating moved to the
-   per-student subscription layer.
-2. Keep the private `pilot` plan as-is.
-3. Delete `basic`/`standard`/`pro` rows, migrating existing subscription
-   rows to `free` first. **Confirm with a query before deleting** — likely
-   one or two E2E tenants, but don't assume zero.
-4. `signup.service.ts` assigns `free`. School trial logic becomes
-   irrelevant — leave the columns, stop relying on them.
-5. Update `db/seeds/verify.ts` if it asserts anything about plan pricing.
+1. **There is no password-setting step anywhere in the codebase.**
+   `join.service.ts`'s `join()` redeems a token and calls
+   `issueSessionForVerifiedUser()` directly — it never asks the person to
+   create a password. Every password that exists today (`Demo@12345`, the
+   platform admin's) was set directly by a seed script, never by the user
+   themselves. This is PART A below and is the actual blocker — nothing
+   else matters until this exists.
+2. **Staff invite generation silently drops anyone without a phone
+   number.** `onboarding.service.ts` filters candidates with
+   `.filter((m) => m.phone)` before creating tokens, even though email is
+   already a delivery channel. An email-only staff member currently never
+   gets invited at all.
 
 ---
 
-## PART B — Subscription schema
-
-New table `student_subscriptions`:
-
-```ts
-{
-  id: pk(),
-  tenantId: uuid → tenants.id, cascade, NOT NULL,
-  branchId: uuid → branches.id, cascade, NOT NULL,
-  studentId: uuid → students.id, cascade, NOT NULL,
-  academicSessionId: uuid → academic_sessions.id, cascade, NOT NULL,
-
-  status: enum('active','expired','refunded','cancelled') NOT NULL,
-
-  // Money — ALWAYS integer paise, never float.
-  totalPaise: integer NOT NULL,      // 36500
-  basePaise: integer NOT NULL,       // 30932
-  gstPaise: integer NOT NULL,        // 5568
-
-  source: enum('google_play','manual_cash','complimentary') NOT NULL,
-
-  // Phase 2 — nullable now, populated by Play verification later.
-  playPurchaseToken: text,           // unique partial index where not null
-  playOrderId: varchar(100),
-
-  // Manual path audit — WHO took the money and when. Non-negotiable.
-  activatedByUserId: uuid → users.id,
-  activatedAt: timestamptz NOT NULL,
-  notes: varchar(300),               // school's own receipt number
-
-  // Billing back to the school for manual activations.
-  billedToSchoolAt: timestamptz,     // null = not yet invoiced
-  platformInvoiceId: uuid,
-
-  expiresAt: timestamptz NOT NULL,   // = academic session end
-  ...timestamps, ...actorstamps, ...syncable
-}
-```
-
-**Unique constraint:** `(student_id, academic_session_id)` using
-`unique(...).nullsNotDistinct()` per the convention in migrations
-`0008`–`0010`. Precondition-check for duplicates before applying, same
-pattern as those migrations.
-
-**Indexes:** `(tenant_id, academic_session_id, status)` for the admin list;
-partial index on `(tenant_id, source, billed_to_school_at)` where
-`source = 'manual_cash' AND billed_to_school_at IS NULL` — that's the "what
-do we invoice this school for" query and it must be cheap.
-
-**RLS:** tenant-scoped like every other tenant table. Re-run
-`app_apply_tenant_rls()` and `app_attach_sync_triggers()`, and confirm
-`saw_app` grants on production — production runs least-privilege Postgres
-where CI does not, which is how the `global_row_version` and `audit_logs`
-REVOKE bugs were found.
-
-### GST math — verified
-
-**Rate: 18%.** Confirmed for SaaS/cloud subscription services. Intra-state
-splits 9% CGST + 9% SGST; inter-state is 18% IGST.
-
-**No exemption applies.** Entry 66 of Notification 12/2017-CT(R) exempts
-services provided *by an educational institution to its students*. We are
-not an educational institution, and our supply runs either to a parent
-(B2C) or to a school (B2B). Neither is exempt. Do not build any
-exemption-handling path.
-
-₹365 is **inclusive** of 18% GST:
-```
-totalPaise = 36500
-basePaise  = round(36500 / 1.18) = 30932
-gstPaise   = totalPaise - basePaise = 5568
-```
-
-**Always derive `gstPaise` as `total - base`**, never independently — that
-guarantees the three columns sum exactly with no rounding drift across
-thousands of rows.
-
-Stay Connected Fee is ₹500 **plus** GST (exclusive):
-```
-basePaise = 50000, gstPaise = 9000, totalPaise = 59000
-```
-
-Put both in one constants file with a comment explaining
-inclusive-vs-exclusive so nobody re-derives them wrongly later.
-
----
-
-## PART C — Enforcement: what locks, what must never lock
-
-**The rule:** an unpaid student's parent sees **only today's present/absent
-status** at the top of the app. Everything else is behind a paywall.
-
-### Google Play policy — researched, and it constrains the UI
-
-Google's Payments policy explicitly lists "subscription services… education…
-content subscription services" and "cloud software and services" as
-requiring Play billing for in-app purchases. Our app is squarely in scope.
-
-The operative restriction: **within an app, developers may not lead users to
-a payment method other than Play's billing system — including linking to a
-webpage that could lead to an alternate payment method, or using language
-that encourages purchasing outside the app.** However, **outside the app,
-developers are free to communicate alternative purchase options** (email and
-other channels are explicitly permitted).
-
-**What this means concretely:**
-- The parent app/paywall must not say "pay cash at school", must not link
-  anywhere that leads to alternate payment, must not hint at it.
-- The **school** telling parents "bring ₹365 to the office" is entirely
-  fine — that's outside the app, and the school is not the developer.
-- The manual activation UI lives in `web-admin` (school staff only) and must
-  be invisible to `web-family`.
-
-Build to that line exactly.
-
-### `assertSubscribed(studentId)` — mirror `assertInScope`
-
-Put it beside `scope.util.ts` and follow that file's discipline exactly,
-including its most important invariant: **the failure mode must be "locked",
-never "unlocked".** If the lookup errors, throws, or returns nothing, the
-answer is LOCKED. Accidentally unlocking the product for everyone is far
-worse than wrongly locking one parent, and this codebase already treats that
-inversion as security-grade (`scope.util.spec.ts`). Write the tests to the
-same standard.
-
-Apply to **every** endpoint in `family.controller.ts` — `home`, `children`,
-`fees`, `payments/:id`, `results`, `books`, `bus`, profile PATCH, photo,
-document, `leave` (both) — plus the diary/homework feed endpoints
-`web-family` calls, and the notifications inbox.
-
-### Three things that must stay accessible when unpaid
-
-1. **Today's attendance status** for that student.
-2. **The absentee notification itself.** When a child is marked absent, the
-   parent gets the alert regardless of subscription. It is a child-safety
-   message; withholding it for ₹365 is wrong and a reputational risk. It is
-   also your best conversion mechanic — the parent opens the app at the
-   exact moment they care most and meets the paywall there.
-3. **The parent's own children list with lock status**, so the paywall can
-   say "Aarav — active until 31 Mar 2027 · Ananya — locked".
-
-### Grace period
-
-30 days from `tenants.activatedAt`, during which all students are treated as
-subscribed. A school onboarding in October cannot have every parent hit a
-paywall on day one — they'd never demonstrate value and would churn. Named
-constant, surfaced to school admin so they know when collection starts. If
-you think a different default is better, say so, but don't ship without one.
-
-### `web-family` paywall screen
-
-Clean, non-hostile, design-system compliant. Shows which child is locked,
-₹365/year framed as ₹1/day, and what unlocks. **No mention of cash, school
-payment, or any non-Play method.** For Phase 1 there is no working payment
-button — state that payment opens in the mobile app (coming soon) and leave
-a clearly-marked TODO for the Phase 2 Play flow.
-
----
-
-## PART D — Manual cash activation (school admin panel)
-
-New page in `web-admin`, e.g. `/subscriptions`.
-
-- Lists students for the current session with subscription status, filterable
-  by class/section, searchable by name or admission number.
-- Multi-select reusing the **existing `ApprovalsPage` selection pattern** —
-  don't invent a third selection UI.
-- Action "Mark as paid (cash collected)" → creates subscriptions with
-  `source: 'manual_cash'`, `activatedByUserId` from context (never from the
-  request body), optional per-row `notes` for the school's receipt number.
-- **Confirmation dialog stating the liability plainly:** *"You are activating
-  24 subscriptions. School All Ways will invoice your school ₹8,760 for
-  these. Continue?"* A surprise invoice is the fastest way to lose a pilot
-  school.
-- Batch endpoint `POST /subscriptions/manual-activate`, array input, chunked
-  at 500, returning `{ activated, skipped, skippedReasons }` — the same
-  partial-success standard as bulk account issue and import commit.
-  Already-subscribed students are skipped with a reason, never double-charged.
-- Idempotent via `X-Client-Mutation-Id` like every other write endpoint.
-
-**Permission:** new `subscription.manual.activate`, granted to `school_admin`
-and `accounts_head`. **Do not grant to `front_office`** without asking —
-earlier in this build `front_office` was deliberately kept away from actions
-with financial consequences, and this creates a real liability for the
-school. Raise it rather than deciding unilaterally.
-
-Audit: one batched audit event per call, not per row.
-
----
-
-## PART E — Stay Connected Fee (₹500 + GST per school per year)
-
-New table `stay_connected_fees`: `tenantId`, `academicSessionId`,
-`basePaise` 50000, `gstPaise` 9000, `totalPaise` 59000, `status`
-(`pending`/`paid`/`waived`), `dueDate`, `paidAt`, `invoiceNumber`, timestamps.
-
-- One row per tenant per academic session, created when a session becomes
-  current (or at tenant activation for the first).
-- **Blocks nothing.** A pending fee shows a persistent but dismissible banner
-  only to holders of `tenant.settings.manage` and the principal/headmaster
-  role. Teachers and parents must never see it.
-- Marking it paid is a **platform admin** action in `web-control`, not
-  something the school can self-declare.
-- **Per school, not per branch** — one fee per tenant per session regardless
-  of branch count.
-
----
-
-## PART F — Platform console billing view (`web-control`)
-
-**Privacy constraint holds:** `db/schema/15-platform.ts` states the console
-reads only aggregate data and structurally cannot see student PII. The
-console shows **counts and totals per school**, never student names, never
-which child was activated. Counts are all invoicing needs.
-
-Per tenant, show:
-- Manual activations this session: **count** and amount owed
-  (`count × ₹365`), split billed vs unbilled
-- Play activations: count (0 until Phase 2) — reference only; you don't
-  invoice these, see PART G
-- Stay Connected Fee status for the current session
-- Action "Generate invoice" for unbilled manual activations → creates a
-  platform invoice, stamps `billedToSchoolAt` and `platformInvoiceId` so
-  rows are never double-billed
-
-Add a CI-enforced check (same shape as the existing `platform.service.spec.ts`
-grep test) proving the new console queries import nothing from
-student/guardian tables.
-
-### Manual school suspension (dispute lever)
-
-Platform-admin-only. When suspended:
-- **Staff and admin logins blocked** with a clear "contact support" message
-- **Parent access is NOT blocked** — parents paid for the session; cutting
-  them off over a school's billing dispute punishes the wrong people
-- Uses the existing `tenantStatusEnum` value `suspended`
-- Requires a written reason, audited, reversible
-
----
-
-## PART G — Invoicing — RESEARCH CHANGED THIS DESIGN, READ CAREFULLY
-
-**Finding: for Google Play purchases in India, Google is the e-commerce
-operator and determines, charges, and remits GST on behalf of the
-developer.** Indian developers supply their GSTIN to Google, and Google
-handles GST TCS on those sales.
-
-**Therefore we do NOT issue tax invoices to parents for Play purchases.**
-Google collects from the parent, handles the GST, and remits our share. Our
-system records the purchase (via Phase 2 token verification) for
-entitlement, not for tax. Building a parent-facing invoicing path would be
-both wrong and duplicative.
-
-**The invoicing module is therefore only for two B2B cases:**
-1. **Manual activations billed to the school** — we supply to the school,
-   the school collected from parents. Bill at ₹365/student inclusive
-   (₹309.32 base + ₹55.68 GST), so the school is cash-neutral on what it
-   collected.
-2. **The ₹500 + GST Stay Connected Fee.**
-
-This is a significant simplification versus the previous draft — do not
-build parent-facing invoicing.
-
-### Invoice implementation
-
-`platform_invoices` table: sequential `invoiceNumber` (GST requires unique
-sequential numbering per financial year — make the counter collision-safe
-under concurrency), `tenantId`, `lineItems` jsonb, `basePaise`, `cgstPaise`,
-`sgstPaise`, `igstPaise`, `totalPaise`, `placeOfSupply`, `issuedAt`,
-`status`.
-
-**Firm identity from config, never hardcoded:** `FIRM_NAME`, `FIRM_GSTIN`,
-`FIRM_ADDRESS`, `FIRM_STATE_CODE`. Invoice generation must **fail loudly**
-with a clear message if `FIRM_GSTIN` is unset rather than emitting an
-invoice with a blank tax number. (The user runs a proprietorship; GSTIN is
-being obtained.)
-
-**SAC code: `998315`** — "Hosting and information technology (IT)
-infrastructure provisioning services", which explicitly covers SaaS and
-cloud subscriptions. **This corrects the previous draft's `998314`**, which
-is IT design and development services (custom development work) and is the
-wrong classification for a hosted subscription product. Both attract 18%,
-so the rate is unaffected, but the classification should be right on the
-invoice.
-
-**Intra-state vs inter-state:** if the school's state equals
-`FIRM_STATE_CODE`, split CGST 9% + SGST 9%; otherwise IGST 18%. Source the
-state from the branch/tenant data captured at signup.
-
-Generate the PDF using the **`pdf` skill's approach** (not pypdf). Include
-firm details + GSTIN, school details, SAC 998315, line items, tax split, and
-total in figures and words.
-
-**Still flag for CA review** in your report: final invoice format, the SAC
-classification as applied to this specific product, and GST treatment of the
-manual-activation flow (whether billing the school for what it collected
-from parents is cleanest, or whether a different structure is preferable).
-The research above is well-sourced but is not a substitute for a CA's sign-off.
-
----
-
-## PART H — Marketing site
-
-Rewrite `/pricing`:
-- Headline: **Free for schools.**
-- **₹1 per day per student** (₹365/year, GST included), paid by parents
-- ₹500 + GST/year Stay Connected Fee for the school
-- Remove the three-tier table entirely
-- State explicitly that every feature is included for every school
-
----
-
-## Explicitly NOT in this round
-
-- Google Play Billing, purchase-token verification, the Flutter app
-- Any parent-facing payment button that actually charges money
-- Razorpay or any other gateway for parent payments
-- Parent-facing invoicing (see PART G — Google handles it)
-
----
-
-## Verification
-
-```bash
-pnpm typecheck
-pnpm --filter @saw/api test
-pnpm --filter @saw/db verify
-pnpm --filter @saw/web-admin build
-pnpm --filter @saw/web-family build
-pnpm --filter @saw/web-control build
-pnpm --filter @saw/web-marketing build
-pnpm lint
-node scripts/check-scope-decorators.mjs
-node scripts/e2e-onboarding.mjs
-```
-
-Unit tests required for: the GST split summing exactly; `assertSubscribed`
-failing closed on every error path (mirror `scope.util.spec.ts`'s structure
-and rigour); grace-period boundary behaviour; double-activation skipped not
-double-charged; invoice number sequencing under concurrent calls.
-
-Live-verify on production against the E2E test tenant: a locked parent sees
-only attendance, an activated one sees everything, the manual activation
-appears in the console count, and invoice generation refuses cleanly without
-`FIRM_GSTIN` with a clear message.
-
-## Definition of done
-
-- [ ] Plans collapsed to one free plan; no per-school pricing anywhere
-- [ ] `student_subscriptions` live with correct constraints, indexes, RLS,
-      confirmed `saw_app` grants on production
-- [ ] GST math exact, `gst = total - base`, test-verified
-- [ ] `assertSubscribed` on every family endpoint, fails closed, tested to
-      `scope.util.spec.ts` standard
-- [ ] Attendance status, absentee notifications, children list stay
-      accessible when unpaid
-- [ ] 30-day grace period, surfaced to school admin
-- [ ] Paywall in `web-family` with zero reference to cash/alternate payment
-- [ ] Manual activation UI with explicit liability confirmation, batched,
-      idempotent, partial-success reporting, audited
-- [ ] `subscription.manual.activate` scoped; `front_office` question raised
-- [ ] Stay Connected Fee tracked, banner to admin/head only, blocks nothing
-- [ ] Console shows per-school counts and amounts owed, zero student PII,
-      CI-enforced
-- [ ] Invoicing covers ONLY school-billed manual activations + Stay
-      Connected Fee — no parent-facing invoices
-- [ ] SAC 998315 on invoices, correct CGST/SGST vs IGST split, sequential
-      numbering, fails loudly without GSTIN
-- [ ] Suspension blocks staff but not parents
-- [ ] Marketing page reflects the real model
-- [ ] Regression check on all production sites passes
-
----
-
-**Report back with:** every judgment call, the `front_office` permission
-question, anything still needing CA review, live verification output, test
-results, and anything in this spec that was wrong, contradictory, or
-impossible. **If anything is ambiguous, stop and ask rather than guessing —
-this round touches money and access control at the same time.**
+## PART A — Add a real "set your password" step to the join flow
+
+This is the foundation everything else depends on.
+
+1. Split `join()` into two calls: keep something like the current
+   `join()` as a **preview** (validate token, return status +
+   `schoolName`, no session yet — the frontend uses this to show "Welcome
+   to Sunrise Public School" before asking for a password). Add a new
+   endpoint, e.g. `POST /auth/join/:token/activate` with `{ password }`,
+   that: re-validates the token (not expired, not consumed), hashes the
+   password with argon2id (mirror `db/seeds/platform-admin.ts`'s
+   `MIN_PASSWORD_LENGTH = 12` pattern), writes `passwordHash` onto the
+   token's `userId`, then does the same transactional
+   consume-token/activate-membership/issue-session sequence `join()` does
+   today.
+2. This must work for all three purposes below — don't special-case only
+   `staff_invite`.
+3. Update `join.service.spec.ts` accordingly; keep the existing rate-limit
+   (`FAILED_LIMIT`/`FAILED_WINDOW_SECONDS`) logic intact — password
+   guessing against a token is the same attack the comment already
+   describes for OTP.
+
+## PART B — Fix staff invite eligibility
+
+Change `onboarding.service.ts`'s invite-candidate filter from "has a
+phone" to "has an email" (staff records should already collect a work
+email — check `db/schema/06-staff.ts`'s `workEmail` field and use it if
+`users.email` isn't populated). Staff invite fan-out should default to
+`channels: ['email']` — SMS/in-app can stay as secondary if you want, but
+email is now the primary and required channel, not phone.
+
+## PART C — Build student invites (new)
+
+1. Add `student_invite` to wherever the join-token `purpose` enum is
+   defined (find it — likely near the `joinTokens` table definition).
+2. Build a way for a school admin to trigger a student invite — likely a
+   new endpoint under the students module, per-student, that: collects/
+   confirms a student email (real schools frequently do **not** have a
+   student's own email on file — check with Abhishek whether this should
+   be a required field added to the student record, or entered ad hoc at
+   invite time; don't assume), creates a `users` row (`kind: 'student'`)
+   if `students.userId` is null, links it, assigns the `student` role via
+   `userRoleAssignments` (`scopeType: 'self'`, mirroring how
+   `parentRole`/`teacherRole` assignment works in `db/seeds/demo.ts`),
+   creates the join token, and fans it out via the same
+   `fanOutInvites()`-style mechanism.
+3. Extend `join.service.ts`'s `join()`/new activate endpoint to branch on
+   `student_invite` the same way it branches on `staff_invite` today.
+
+## PART D — Move parent/guardian to email, remove phone+OTP login
+
+1. Parent invite fan-out already supports email — confirm/default it to
+   `channels: ['email']` the same way as PART B.
+2. Find and remove (or clearly deprecate, gated behind a flag if you'd
+   rather not delete outright) the standalone phone+OTP login path used
+   for **ongoing** guardian logins — `apps/api/src/modules/auth/otp.service.ts`
+   and whatever `auth.controller.ts` endpoints call it for login (not
+   registration/join). Replace with the same email+password login every
+   other role now uses.
+3. Phone stays on the `users`/`guardians` record as a contact field — do
+   not remove the column or break SMS notification code paths that read
+   it. This is strictly an authentication change.
+
+## PART E — Frontend/mobile
+
+Update every login/registration screen that currently assumes phone+OTP:
+
+- `apps/mobile-family` and `apps/web-family` — currently phone+OTP entry;
+  needs email+password login, plus a new "set your password" screen that
+  opens from the emailed invite link/deep link.
+- Check `apps/mobile-admin`/`apps/web-admin` and `apps/web-control` too —
+  staff/platform logins are probably already email+password, but verify
+  no phone-first assumption leaked in anywhere (e.g. registration/first-
+  run screens).
+- `packages/flutter/core_auth` — shared auth logic between the two Flutter
+  apps; check what deep-link handling exists today for the join URL
+  pattern (`{FAMILY_WEB_URL}/join/:token` per `joinBaseFor()` in
+  `onboarding.service.ts`) and whether the mobile apps can open that link
+  at all today or only the web apps can.
+
+## PART F — Config and seeds
+
+1. Add `GMAIL_USER` / `GMAIL_APP_PASSWORD` to `.env.example` with a
+   comment pointing at an App Password, not the account password (see
+   `gmail.provider.ts`'s own header comment). Actually setting real
+   values in production is Abhishek's task, not yours.
+2. `db/seeds/demo.ts` sets passwords/phone directly, bypassing the invite
+   flow entirely — that's fine and should keep working as a fast local
+   testing shortcut. Update its printed "Parent phone: ... (OTP login)"
+   messaging once OTP login is gone — give the demo parent an email +
+   `Demo@12345` too, consistent with the other three demo logins.
+
+## Constraints that don't change
+
+Everything else about this codebase's discipline still applies: RLS/
+tenant isolation via `db.asTenant()`, argon2id for all password hashing,
+audit logging on auth events (mirror `join.service.ts`'s `writeAudit`),
+and the CI tenant-isolation + verify jobs must still pass. Don't touch
+billing/subscription logic (PART G of the previous work order) — unrelated
+to this change.

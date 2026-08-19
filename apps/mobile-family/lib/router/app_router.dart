@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/attendance/presentation/attendance_screen.dart';
+import '../features/auth/presentation/join_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
-import '../features/auth/presentation/otp_screen.dart';
 import '../features/auth/presentation/select_school_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/books/presentation/books_shelf_screen.dart';
@@ -42,9 +42,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       final loc = state.matchedLocation;
       final session = ref.read(sessionProvider);
       final loggingIn = loc == Routes.login ||
-          loc == Routes.otp ||
           loc == Routes.selectSchool ||
-          loc == Routes.splash;
+          loc == Routes.splash ||
+          loc.startsWith(Routes.joinPrefix);
 
       if (session.isLoading) {
         return loc == Routes.splash ? null : Routes.splash;
@@ -52,8 +52,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       final signedIn = session.valueOrNull != null;
       if (!signedIn && !loggingIn) return Routes.login;
-      if (signedIn &&
-          (loc == Routes.login || loc == Routes.otp || loc == Routes.splash)) {
+      if (signedIn && (loc == Routes.login || loc == Routes.splash)) {
         return Routes.home;
       }
 
@@ -84,12 +83,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.login,
         builder: (_, __) => const LoginScreen(),
-        routes: [
-          GoRoute(
-            path: 'otp',
-            builder: (_, __) => const OtpScreen(),
-          ),
-        ],
+      ),
+      GoRoute(
+        path: '/join/:token',
+        builder: (_, state) => JoinScreen(
+          token: state.pathParameters['token'] ?? '',
+        ),
       ),
       GoRoute(
         path: Routes.selectSchool,

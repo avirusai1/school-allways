@@ -8,7 +8,6 @@ import { ApiException } from '../../common/errors/api.exception';
 import { RequestContextStore } from '../../common/context/request-context';
 import { TenantDbService } from '../../common/database/tenant-db.service';
 import { publicFileUrl } from '../../common/utils/url.util';
-import { normalizePhone } from '../import/import.util';
 import { AuthRepository, type MembershipRow } from './auth.repository';
 import { OtpService } from './otp.service';
 import { SessionService } from './session.service';
@@ -55,6 +54,7 @@ export class AuthService implements OnModuleInit {
   }
 
   async requestOtp(dto: RequestOtpDto): Promise<RequestOtpResponseDto> {
+    this.refuseLoginOtp(dto.purpose);
     const ctx = RequestContextStore.peek();
     const result = await this.otp.requestOtp({
       phone: dto.phone,
@@ -77,6 +77,7 @@ export class AuthService implements OnModuleInit {
   }
 
   async verifyOtp(dto: VerifyOtpDto): Promise<AuthTokensResponseDto> {
+    this.refuseLoginOtp(dto.purpose);
     await this.otp.verifyOtp({
       phone: dto.phone,
       email: dto.email,
@@ -117,21 +118,9 @@ export class AuthService implements OnModuleInit {
 
   async passwordLogin(dto: PasswordLoginDto): Promise<AuthTokensResponseDto> {
     const ctx = RequestContextStore.peek();
-    const email = dto.email?.trim().toLowerCase();
-    const phone = dto.phone ? normalizePhone(dto.phone) ?? dto.phone.trim() : undefined;
-    if (!email && !phone) {
-      throw new ApiException(
-        400,
-        'VALIDATION_FAILED',
-        'Provide an email address or a mobile number.',
-      );
-    }
+    const email = dto.email.trim().toLowerCase();
 
-    const user = await this.db.runUnscoped(async (tx) => {
-      if (email) return this.repo.findUserByEmail(tx, email);
-      if (phone) return this.repo.findUserByPhone(tx, phone);
-      return null;
-    });
+    const user = await this.db.runUnscoped((tx) => this.repo.findUserByEmail(tx, email));
 
     if (user?.lockedUntil && user.lockedUntil > new Date()) {
       throw new ApiException(401, 'UNAUTHENTICATED', 'Sign-in details are incorrect.', {
@@ -418,14 +407,9 @@ export class AuthService implements OnModuleInit {
   }
 
   /**
-   * Issue a session for a user whose identity has already been established by
-   * some other means. Today that means a join link: tapping a URL that only
-   * the phone the school has on file could have received is the same class of
-   * proof as reading an OTP off that phone, so making them then type a code
-   * would be ceremony, not security.
-   *
-   * Deliberately narrow — it performs no verification of its own. The caller
-   * owns that, and there should be very few callers.
+   * Issue a session for a user whose identity has already been established.
+   * Callers: join-link activation (email token + the password they just set)
+   * and the public-signup handoff. Performs no verification of its own.
    */
   async issueSessionForVerifiedUser(userId: string): Promise<AuthTokensResponseDto> {
     const ctx = RequestContextStore.peek();
@@ -453,13 +437,27 @@ export class AuthService implements OnModuleInit {
 
   /**
    * An imported parent is created with membership `invited` until they tap the
-   * join link. OTP login only lists `active` memberships (correct — they must
-   * not get a school session yet). Returning `requiresTenantSelection: true`
-   * with an empty `tenants` array looked identical to an account error; refuse
-   * the session and say why instead.
+   * join link and set a password. Password login only lists `active`
+   * memberships (correct — they must not get a school session yet). Returning
+   * `requiresTenantSelection: true` with an empty `tenants` array looked
+   * identical to an account error; refuse the session and say why instead.
    *
    * Platform users may legitimately have zero school memberships.
    */
+  /**
+   * Phone + OTP is no longer a login. The endpoints stay for school signup
+   * (and a few other non-login purposes) so we refuse `login` here rather than
+   * deleting the service.
+   */
+  private refuseLoginOtp(purpose: string): void {
+    if (purpose !== 'login') return;
+    throw new ApiException(
+      410,
+      'GONE',
+      'Sign in with the email and password from your school invitation. Phone OTP login is no longer available.',
+    );
+  }
+
   private staffReachableMemberships(kind: string, memberships: MembershipRow[]): MembershipRow[] {
     if (kind === 'guardian' || kind === 'student' || kind === 'platform') return memberships;
     return memberships.filter((m) => m.tenantStatus !== 'suspended');
@@ -489,14 +487,14 @@ export class AuthService implements OnModuleInit {
       throw new ApiException(
         403,
         'INVITATION_PENDING',
-        'You have an invitation waiting — check your SMS or WhatsApp for the join link from your school.',
+        'You have an invitation waiting — check your email for the join link from your school.',
       );
     }
 
     throw new ApiException(
       403,
       'NO_SCHOOL_ACCESS',
-      'This number is not linked to an active school account. Contact your school for a join link.',
+      'This email is not linked to an active school account. Contact your school for a join link.',
     );
   }
 

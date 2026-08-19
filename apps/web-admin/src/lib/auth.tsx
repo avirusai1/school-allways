@@ -14,16 +14,17 @@ type AuthContextValue = {
   isLoading: boolean;
   isAuthenticated: boolean;
   loginWithPassword: (email: string, password: string) => Promise<void>;
-  joinWithToken: (token: string) => Promise<JoinResult>;
+  previewJoin: (token: string) => Promise<JoinResult>;
+  activateJoin: (token: string, password: string) => Promise<JoinResult>;
   handoffWithCode: (code: string) => Promise<JoinResult>;
   logout: () => Promise<void>;
   hasPermission: (code: string) => boolean;
 };
 
 export type JoinResult = {
-  status: 'invalid' | 'expired' | 'already_activated' | 'joined';
+  status: 'invalid' | 'expired' | 'already_activated' | 'pending' | 'joined';
   schoolName?: string;
-  purpose?: 'parent_profile' | 'staff_invite' | 'signup_handoff';
+  purpose?: 'parent_profile' | 'staff_invite' | 'student_invite' | 'signup_handoff';
   auth?: {
     accessToken: string;
     refreshToken: string;
@@ -72,34 +73,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   /**
-   * Redeems a one-time code for a session. Two entry points use this — a
-   * teacher's invitation link and the handover from public signup — and both
-   * must end up with a session indistinguishable from a password login, so the
-   * storage and tenant-selection steps live here once.
+   * Redeems a one-time code for a session. Signup handoff uses this; staff
+   * invites go through preview + activate so the person sets a password first.
    */
   const redeem = useCallback(
-    async (path: string): Promise<JoinResult> => {
-      const body = await apiFetch<JoinResult>(path, { method: 'POST' });
+    async (path: string, body?: unknown): Promise<JoinResult> => {
+      const res = await apiFetch<JoinResult>(path, {
+        method: 'POST',
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      });
 
-      if (body.status !== 'joined' || !body.auth) return body;
+      if (res.status !== 'joined' || !res.auth) return res;
 
-      setTokens(body.auth.accessToken, body.auth.refreshToken);
-      if (body.auth.requiresTenantSelection && body.auth.tenants?.[0]) {
+      setTokens(res.auth.accessToken, res.auth.refreshToken);
+      if (res.auth.requiresTenantSelection && res.auth.tenants?.[0]) {
         const selected = await apiFetch<{ accessToken: string }>('/auth/select-tenant', {
           method: 'POST',
-          body: JSON.stringify({ tenantId: body.auth.tenants[0].id }),
+          body: JSON.stringify({ tenantId: res.auth.tenants[0].id }),
         });
         setTokens(selected.accessToken);
       }
       await qc.invalidateQueries({ queryKey: ['session'] });
-      return body;
+      return res;
     },
     [qc],
   );
 
-  /** A teacher's first sign-in, before they have a password. */
-  const joinWithToken = useCallback(
-    (token: string) => redeem(`/auth/join/${encodeURIComponent(token)}`),
+  const previewJoin = useCallback(
+    (token: string) =>
+      apiFetch<JoinResult>(`/auth/join/${encodeURIComponent(token)}`, { method: 'POST' }),
+    [],
+  );
+
+  const activateJoin = useCallback(
+    (token: string, password: string) =>
+      redeem(`/auth/join/${encodeURIComponent(token)}/activate`, { password }),
     [redeem],
   );
 
@@ -127,7 +135,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading: sessionQuery.isPending,
       isAuthenticated: Boolean(session),
       loginWithPassword,
-      joinWithToken,
+      previewJoin,
+      activateJoin,
       handoffWithCode,
       logout,
       hasPermission: (code) => Boolean(session?.permissions.includes(code)),
@@ -136,7 +145,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       sessionQuery.isPending,
       loginWithPassword,
-      joinWithToken,
+      previewJoin,
+      activateJoin,
       handoffWithCode,
       logout,
     ],

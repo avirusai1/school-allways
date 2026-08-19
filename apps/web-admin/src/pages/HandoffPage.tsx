@@ -65,6 +65,17 @@ export function HandoffPage() {
     );
   }
 
+  const closed = result.status;
+  if (closed === 'pending') {
+    return (
+      <Shell>
+        <Skeleton height={28} className="w-2/3" />
+        <Skeleton height={16} className="mt-3 w-full" />
+        <Skeleton height={44} className="mt-6 w-full" />
+      </Shell>
+    );
+  }
+
   // Three outcomes, three different things to say. They all end at the login
   // screen, but telling someone their school "has been used" when the code was
   // mistyped sends them looking for a problem that isn't there.
@@ -81,7 +92,7 @@ export function HandoffPage() {
       title: 'This link has been used',
       body: `${result.schoolName ? `${result.schoolName} is set up. ` : ''}Sign in to carry on where you left off.`,
     },
-  }[result.status];
+  }[closed];
 
   return (
     <Shell>

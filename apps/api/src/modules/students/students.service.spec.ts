@@ -30,7 +30,7 @@ describe('StudentsService.list', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    service = new StudentsService(config as never, db as never, repo as never);
+    service = new StudentsService(config as never, db as never, repo as never, {} as never);
   });
 
   it('returns only sections the class teacher is assigned to', async () => {

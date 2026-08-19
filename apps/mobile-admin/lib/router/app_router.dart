@@ -5,9 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/attendance/presentation/take_attendance_screen.dart';
-import '../features/auth/presentation/email_login_screen.dart';
+import '../features/auth/presentation/join_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
-import '../features/auth/presentation/otp_screen.dart';
 import '../features/auth/presentation/select_school_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/dashboard/presentation/principal_dashboard_screen.dart';
@@ -43,9 +42,8 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
       final session = ref.read(sessionProvider);
       final onAuth = loc == AdminRoutes.splash ||
           loc == AdminRoutes.login ||
-          loc == AdminRoutes.otp ||
-          loc == AdminRoutes.emailLogin ||
-          loc == AdminRoutes.selectSchool;
+          loc == AdminRoutes.selectSchool ||
+          loc.startsWith(AdminRoutes.joinPrefix);
 
       if (session.isLoading) {
         return loc == AdminRoutes.splash ? null : AdminRoutes.splash;
@@ -53,11 +51,7 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
 
       final signedIn = session.valueOrNull != null;
       if (!signedIn && !onAuth) return AdminRoutes.login;
-      if (signedIn &&
-          (loc == AdminRoutes.login ||
-              loc == AdminRoutes.otp ||
-              loc == AdminRoutes.emailLogin ||
-              loc == AdminRoutes.splash)) {
+      if (signedIn && (loc == AdminRoutes.login || loc == AdminRoutes.splash)) {
         return AdminRoutes.home;
       }
 
@@ -77,12 +71,10 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const LoginScreen(),
       ),
       GoRoute(
-        path: AdminRoutes.otp,
-        builder: (_, __) => const OtpScreen(),
-      ),
-      GoRoute(
-        path: AdminRoutes.emailLogin,
-        builder: (_, __) => const EmailLoginScreen(),
+        path: '/join/:token',
+        builder: (_, state) => JoinScreen(
+          token: state.pathParameters['token'] ?? '',
+        ),
       ),
       GoRoute(
         path: AdminRoutes.selectSchool,
