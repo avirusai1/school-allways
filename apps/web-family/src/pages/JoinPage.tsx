@@ -184,7 +184,7 @@ export function JoinPage() {
               {students.map((s) => (
                 <li
                   key={s.id}
-                  className="flex items-center gap-3 rounded-md border border-grey-200 bg-grey-0 p-3"
+                  className="flex items-center gap-3 rounded-md bg-surface-container-low p-3"
                 >
                   <Avatar name={s.name} src={s.photoUrl ?? undefined} />
                   <div>
@@ -223,7 +223,7 @@ export function JoinPage() {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen items-start justify-center bg-grey-25 px-4 py-10">
-      <div className="w-full max-w-md rounded-md border border-grey-200 bg-grey-0 p-6">
+      <div className="w-full max-w-md rounded-md bg-surface-container-low p-6">
         {children}
       </div>
     </div>

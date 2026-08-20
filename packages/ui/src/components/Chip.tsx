@@ -7,7 +7,7 @@ export interface ChipProps {
 }
 
 const toneClass: Record<ChipTone, string> = {
-  neutral: 'bg-grey-50 text-grey-700',
+  neutral: 'bg-surface-container-highest text-grey-700',
   success: 'bg-green-50 text-green-700',
   danger: 'bg-red-50 text-red-700',
   warning: 'bg-orange-50 text-orange-700',

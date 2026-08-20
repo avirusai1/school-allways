@@ -16,7 +16,7 @@ export function PaywallScreen({ children, highlightId }: Props) {
   const focus = locked.find((c) => c.id === highlightId) ?? locked[0];
 
   return (
-    <section className="rounded-md border border-grey-200 bg-grey-0 p-5">
+    <section className="rounded-md bg-surface-container-low p-5">
       <h2 className="text-h2 text-grey-900">Unlock the full parent app</h2>
       <p className="mt-2 text-body-small text-grey-600">
         ₹1 per day per student — {formatIndianMoney(36500, false)} a year, GST included.

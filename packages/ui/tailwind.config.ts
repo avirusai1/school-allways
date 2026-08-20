@@ -72,6 +72,31 @@ const config: Config = {
         primary: {
           500: 'rgb(var(--color-primary-500) / <alpha-value>)',
         },
+        // —— M3 role tokens ——
+        'primary-container': 'rgb(var(--color-primary-container) / <alpha-value>)',
+        'on-primary-container': 'rgb(var(--color-on-primary-container) / <alpha-value>)',
+        'secondary-container': 'rgb(var(--color-secondary-container) / <alpha-value>)',
+        'on-secondary-container': 'rgb(var(--color-on-secondary-container) / <alpha-value>)',
+        tertiary: 'rgb(var(--color-tertiary) / <alpha-value>)',
+        'on-tertiary': 'rgb(var(--color-on-tertiary) / <alpha-value>)',
+        'tertiary-container': 'rgb(var(--color-tertiary-container) / <alpha-value>)',
+        'on-tertiary-container': 'rgb(var(--color-on-tertiary-container) / <alpha-value>)',
+        'error-container': 'rgb(var(--color-error-container) / <alpha-value>)',
+        'on-error-container': 'rgb(var(--color-on-error-container) / <alpha-value>)',
+        'surface-dim': 'rgb(var(--color-surface-dim) / <alpha-value>)',
+        'surface-bright': 'rgb(var(--color-surface-bright) / <alpha-value>)',
+        'surface-container-lowest': 'rgb(var(--color-surface-container-lowest) / <alpha-value>)',
+        'surface-container-low': 'rgb(var(--color-surface-container-low) / <alpha-value>)',
+        'surface-container': 'rgb(var(--color-surface-container) / <alpha-value>)',
+        'surface-container-high': 'rgb(var(--color-surface-container-high) / <alpha-value>)',
+        'surface-container-highest': 'rgb(var(--color-surface-container-highest) / <alpha-value>)',
+        'on-surface-variant': 'rgb(var(--color-on-surface-variant) / <alpha-value>)',
+        outline: 'rgb(var(--color-outline) / <alpha-value>)',
+        'outline-variant': 'rgb(var(--color-outline-variant) / <alpha-value>)',
+        'inverse-surface': 'rgb(var(--color-inverse-surface) / <alpha-value>)',
+        'inverse-on-surface': 'rgb(var(--color-inverse-on-surface) / <alpha-value>)',
+        'inverse-primary': 'rgb(var(--color-inverse-primary) / <alpha-value>)',
+        scrim: 'rgb(var(--color-scrim) / <alpha-value>)',
       },
       spacing: {
         0: '0px',
@@ -86,10 +111,14 @@ const config: Config = {
         12: '48px',
         16: '64px',
       },
+      // M3 canonical shape scale — sm/md retuned from 6/10 to M3's 8/12;
+      // xl (28) is new, used by dialogs and sheets.
       borderRadius: {
-        sm: '6px',
-        md: '10px',
+        xs: '4px',
+        sm: '8px',
+        md: '12px',
         lg: '16px',
+        xl: '28px',
         full: '999px',
       },
       boxShadow: {

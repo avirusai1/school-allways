@@ -57,7 +57,7 @@ export function FeesPage() {
         )}
         {fees.isSuccess && (
           <div className="space-y-4">
-            <div className="rounded-md border border-grey-200 bg-grey-0 p-4">
+            <div className="rounded-md bg-surface-container-low p-4">
               <div
                 className={[
                   'text-numeric-large tabular-nums',
@@ -72,7 +72,7 @@ export function FeesPage() {
             {fees.data.invoices.length === 0 ? (
               <EmptyState headline="No invoices" body="Open fee invoices will list here." />
             ) : (
-              <div className="overflow-hidden rounded-md border border-grey-200 bg-grey-0">
+              <div className="overflow-hidden rounded-md bg-surface-container-low">
                 {fees.data.invoices.map((row) => (
                   <ListRow
                     key={row.id}

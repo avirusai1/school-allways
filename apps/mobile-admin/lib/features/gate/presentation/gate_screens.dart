@@ -16,7 +16,8 @@ ThemeData gateHighContrastTheme() {
   const text = Color(0xFFFFFFFF);
   const muted = Color(0xFFB0B8C1);
   const border = Color(0xFF3D4651);
-  final dark = AppThemeExtension.fromPrimary(const Color(0xFF1B5E9C)).copyWith(
+  final baseTheme = AppTheme.build(const Color(0xFF1B5E9C));
+  final dark = baseTheme.extension<AppThemeExtension>()!.copyWith(
     appBackground: bg,
     surface: surface,
     surfaceAlt: surfaceAlt,

@@ -14,6 +14,7 @@ import '../../dashboard/presentation/principal_dashboard_screen.dart';
 import '../../driver/presentation/driver_screens.dart';
 import '../../fees/presentation/fee_counter_screen.dart';
 import '../../gate/presentation/gate_screens.dart';
+import 'role_home_fallback_screen.dart';
 
 final teacherPendingProvider =
     FutureProvider.autoDispose<List<PendingSection>>((ref) async {
@@ -357,9 +358,10 @@ class _QuickTile extends StatelessWidget {
         borderRadius: AppRadius.borderMd,
         child: Container(
           height: 72,
+          // M3 tonal container rather than a hairline-bordered box.
           decoration: BoxDecoration(
             borderRadius: AppRadius.borderMd,
-            border: Border.all(color: t.border),
+            color: t.surfaceContainerHigh,
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -394,7 +396,11 @@ class RoleHomeScreen extends ConsumerWidget {
       'gate_scanner' => const GateScannerScreen(),
       'driver_home' => const DriverHomeScreen(),
       'finance_dashboard' || 'fee_counter' => const FeeCounterScreen(),
-      _ => const TeacherHomeScreen(),
+      // Roles that genuinely teach. Everything else must NOT silently inherit a
+      // teacher's day — a librarian or nurse opening "Take attendance" is a bug
+      // that looks like a working screen.
+      'teacher_home' || 'front_office' || null => const TeacherHomeScreen(),
+      _ => const RoleHomeFallbackScreen(),
     };
   }
 }

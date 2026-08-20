@@ -147,7 +147,7 @@ export function AttendanceMarker({ sectionId, day = todayIso(), onMarked }: Prop
 
       {error ? <ErrorState message={error} onRetry={() => setError(null)} /> : null}
 
-      <ul className="divide-y divide-grey-200 rounded-md border border-grey-200 bg-grey-0">
+      <ul className="divide-y divide-outline-variant rounded-md bg-surface-container-low">
         {roster.students.map((s) => {
           const value = marks[s.studentId] ?? 'present';
           return (

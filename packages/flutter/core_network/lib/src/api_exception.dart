@@ -158,3 +158,30 @@ ApiException mapApiError({
     _ => UnknownApiException(message: message, code: code),
   };
 }
+
+
+/// True when the server actively REFUSED the caller, as opposed to the request
+/// never reaching it.
+///
+/// Offline-first repositories legitimately fall back to cached data when the
+/// network is unreachable — that is the whole point of the sync architecture.
+/// But a blanket `catch (_)` applies that same fallback to a 401 or 403, and
+/// the user is then shown stale or placeholder data as though it were theirs.
+/// That is how a student, refused by `family.child.read`, was shown a
+/// fabricated child named "Your child" instead of an error.
+///
+/// Use as the guard on every cache fallback:
+///
+/// ```dart
+/// try {
+///   return await _api.get(...);
+/// } catch (e) {
+///   if (isRefusal(e)) rethrow;   // never mask a refusal with cached data
+///   return cachedOr(fallback);
+/// }
+/// ```
+bool isRefusal(Object error) =>
+    error is UnauthenticatedException ||
+    error is PermissionException ||
+    error is ScopeException ||
+    error is SubscriptionRequiredException;

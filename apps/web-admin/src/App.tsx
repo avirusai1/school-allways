@@ -13,6 +13,7 @@ import { HandoffPage } from './pages/HandoffPage';
 import { ImportPage } from './pages/ImportPage';
 import { JoinPage } from './pages/JoinPage';
 import { LoginPage } from './pages/LoginPage';
+import { MobileRolePage } from './pages/MobileRolePage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { StaffAttendancePage } from './pages/StaffAttendancePage';
 import { GuardianAccountsPage } from './pages/GuardianAccountsPage';
@@ -71,12 +72,15 @@ function AdminHomeRoute() {
     return <DashboardPage />;
   }
 
-  const nav = navForManifest(session?.navManifest ?? []).filter(
-    (n) => n.id !== 'dashboard',
-  );
+  const nav = navForManifest(
+    session?.navManifest ?? [],
+    session?.permissions ?? [],
+  ).filter((n) => n.id !== 'dashboard');
   if (nav.length > 0) return <Navigate to={nav[0]!.path} replace />;
 
-  return <PlaceholderPage title={session?.roles?.[0]?.name ?? 'Home'} />;
+  // No web screen at all: a mobile-first role. Say so, rather than implying a
+  // web version is on the way.
+  return <MobileRolePage />;
 }
 
 export function App() {

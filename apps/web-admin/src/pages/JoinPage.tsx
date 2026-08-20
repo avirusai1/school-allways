@@ -196,7 +196,7 @@ function Outcome({
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-grey-25 px-4">
-      <div className="w-full max-w-md rounded-md border border-grey-200 bg-grey-0 p-6">
+      <div className="w-full max-w-md rounded-md bg-surface-container-low p-6">
         {children}
       </div>
     </div>

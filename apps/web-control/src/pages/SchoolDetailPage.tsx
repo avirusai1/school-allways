@@ -182,7 +182,7 @@ export function SchoolDetailPage() {
               />
             </div>
           ) : (
-            <p className="mt-6 rounded-md border border-grey-200 bg-grey-0 p-4 text-body-small text-grey-500">
+            <p className="mt-6 rounded-md bg-surface-container-low p-4 text-body-small text-grey-500">
               No health scores yet — they appear after the next rollup.
             </p>
           )}
@@ -216,7 +216,7 @@ export function SchoolDetailPage() {
               <StatTile label="Storage" value={formatBytes(d.metrics.storageBytes)} />
             </div>
           ) : (
-            <p className="mt-2 rounded-md border border-grey-200 bg-grey-0 p-4 text-body-small text-grey-500">
+            <p className="mt-2 rounded-md bg-surface-container-low p-4 text-body-small text-grey-500">
               No metrics recorded yet.
             </p>
           )}
@@ -281,7 +281,7 @@ export function SchoolDetailPage() {
                 </p>
               ) : null}
               {d.billing.invoices.length > 0 ? (
-                <div className="overflow-hidden rounded-md border border-grey-200 bg-grey-0">
+                <div className="overflow-hidden rounded-md bg-surface-container-low">
                   {d.billing.invoices.map((inv) => (
                     <ListRow
                       key={inv.id}
@@ -325,7 +325,7 @@ export function SchoolDetailPage() {
           </div>
 
           <h2 className="mt-8 text-label text-grey-700">Support access</h2>
-          <div className="mt-2 overflow-hidden rounded-md border border-grey-200 bg-grey-0">
+          <div className="mt-2 overflow-hidden rounded-md bg-surface-container-low">
             {d.supportSessions.length === 0 && (
               <p className="p-4 text-body-small text-grey-500">
                 Nobody from our team has opened a support session for this school.

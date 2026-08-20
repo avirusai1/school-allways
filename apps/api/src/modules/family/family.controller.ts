@@ -96,6 +96,13 @@ export class FamilyController {
     return this.service.selfHome(grant);
   }
 
+  /** The student's own weekly timetable — see FamilyService.selfTimetable(). */
+  @Get('timetable')
+  @RequirePermission('timetable.read')
+  timetable(@Grant('timetable.read') grant: GrantedPermission) {
+    return this.service.selfTimetable(grant);
+  }
+
   @Get('children')
   @RequirePermission('family.child.read')
   children(@Grant('family.child.read') grant: GrantedPermission) {

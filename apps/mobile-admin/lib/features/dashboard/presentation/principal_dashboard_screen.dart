@@ -1,4 +1,5 @@
 import 'package:core_auth/core_auth.dart';
+import 'package:core_network/core_network.dart';
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,7 +18,10 @@ final pendingAttendanceProvider =
   final repo = AttendanceRepository(ref.watch(apiClientProvider));
   try {
     return await repo.fetchPending(day);
-  } catch (_) {
+  } catch (e) {
+    // An empty list reads as "nothing pending". A refusal is not nothing —
+    // let it surface so the screen shows an error instead of a false all-clear.
+    if (isRefusal(e)) rethrow;
     return const [];
   }
 });
@@ -38,7 +42,11 @@ final principalStatsProvider =
     feesToday = (expected['cashCollectedPaise'] as int? ?? 0) +
         (expected['chequeCollectedPaise'] as int? ?? 0) +
         (expected['onlineCollectedPaise'] as int? ?? 0);
-  } catch (_) {}
+  } catch (e) {
+    // Same reasoning: ₹0 collected today is a meaningful figure, and must not
+    // be what a permission failure looks like.
+    if (isRefusal(e)) rethrow;
+  }
   return _PrincipalStats(
     feesTodayPaise: feesToday,
     openItems: pending.length,

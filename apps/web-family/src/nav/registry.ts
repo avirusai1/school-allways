@@ -33,8 +33,8 @@ export const FAMILY_NAV_REGISTRY: FamilyNavItem[] = [
   { key: 'privacy', path: '/privacy', label: 'Privacy', implemented: true },
   // Promised by a role's nav, no screen built yet. Placeholder, never a 404.
   { key: 'attendance', path: '/attendance', label: 'Attendance', implemented: false },
-  { key: 'timetable', path: '/timetable', label: 'Timetable', implemented: false },
-  { key: 'library', path: '/library', label: 'Library', implemented: false },
+  { key: 'timetable', path: '/timetable', label: 'Timetable', implemented: true },
+  { key: 'library', path: '/library', label: 'Library', implemented: true },
   { key: 'gallery', path: '/gallery', label: 'Gallery', implemented: false },
   { key: 'messages', path: '/messages', label: 'Messages', implemented: false },
   { key: 'pickup', path: '/pickup', label: 'Pickup', implemented: false },

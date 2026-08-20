@@ -45,7 +45,10 @@ class FamilyHomeRepository {
         await _prefs.setString(_cacheKey(id), jsonEncode(data));
       }
       return FamilyHome.fromJson(data);
-    } catch (_) {
+    } catch (e) {
+      // A refusal is not an outage — surface it rather than showing an empty
+      // feed that looks like "your school has posted nothing".
+      if (isRefusal(e)) rethrow;
       return FamilyHome.empty(studentId: '', name: 'You');
     }
   }
@@ -59,7 +62,8 @@ class FamilyHomeRepository {
       final data = res.data ?? const <String, dynamic>{};
       await _prefs.setString(_cacheKey(studentId), jsonEncode(data));
       return FamilyHome.fromJson(data);
-    } catch (_) {
+    } catch (e) {
+      if (isRefusal(e)) rethrow;
       final cached = await getCached(studentId);
       if (cached != null) return cached;
       return FamilyHome.empty(studentId: studentId, name: 'Your child');
@@ -80,7 +84,8 @@ class FamilyHomeRepository {
         jsonEncode(children.map((c) => c.toJson()).toList()),
       );
       return children;
-    } catch (_) {
+    } catch (e) {
+      if (isRefusal(e)) rethrow;
       final raw = _prefs.getString(_childrenKey);
       if (raw != null) {
         try {
@@ -91,10 +96,9 @@ class FamilyHomeRepository {
               .toList();
         } catch (_) {}
       }
-      // Demo child so the shell is usable before the API is wired.
-      return const [
-        ChildSummary(id: 'demo', fullName: 'Your child', firstName: 'Child'),
-      ];
+      // Offline with nothing cached. Empty, not a fabricated child: inventing a
+      // record makes a failure look like real data.
+      return const <ChildSummary>[];
     }
   }
 }

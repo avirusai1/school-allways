@@ -51,19 +51,24 @@ export function useSelectedChild() {
     return localStorage.getItem(storageKey(tenantId));
   });
 
-  const selfChild: FamilyChild[] =
-    isStudent && ownStudentId
-      ? [
-          {
-            id: ownStudentId,
-            fullName: session?.user?.fullName ?? 'Me',
-            firstName: session?.user?.displayName ?? session?.user?.fullName ?? 'Me',
-            photoPath: null,
-          },
-        ]
-      : [];
+  const fetched = childrenQuery.data?.data;
+  const fullName = session?.user?.fullName;
+  const displayName = session?.user?.displayName;
 
-  const children = isStudent ? selfChild : (childrenQuery.data?.data ?? []);
+  // Memoised: a fresh array literal each render would re-trigger the effect and
+  // the memo below on every single render.
+  const children = useMemo<FamilyChild[]>(() => {
+    if (!isStudent) return fetched ?? [];
+    if (!ownStudentId) return [];
+    return [
+      {
+        id: ownStudentId,
+        fullName: fullName ?? 'Me',
+        firstName: displayName ?? fullName ?? 'Me',
+        photoPath: null,
+      },
+    ];
+  }, [isStudent, ownStudentId, fetched, fullName, displayName]);
 
   useEffect(() => {
     if (!tenantId || children.length === 0) return;

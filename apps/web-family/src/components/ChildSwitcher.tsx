@@ -19,7 +19,7 @@ export function ChildSwitcher({ children, selectedId, onSelect }: Props) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex max-w-full items-center gap-2 rounded-md border border-grey-200 bg-grey-0 px-3 py-2 text-left transition-colors hover:border-grey-300 hover:bg-grey-25"
+        className="inline-flex max-w-full items-center gap-2 rounded-md bg-surface-container-low px-3 py-2 text-left transition-colors hover:bg-surface-container-high active:bg-surface-container-highest focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
         aria-expanded={open}
         aria-haspopup="listbox"
       >
@@ -47,7 +47,7 @@ export function ChildSwitcher({ children, selectedId, onSelect }: Props) {
           />
           <ul
             role="listbox"
-            className="absolute left-0 top-full z-40 mt-1 min-w-[220px] overflow-hidden rounded-md border border-grey-200 bg-grey-0 shadow-md"
+            className="absolute left-0 top-full z-40 mt-1 min-w-[220px] overflow-hidden rounded-md bg-surface-container shadow-md"
           >
             {children.map((c) => {
               const active = c.id === selectedId;

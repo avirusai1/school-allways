@@ -1,20 +1,22 @@
+import { useMemo } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Button } from '@saw/ui';
+import { controlNavFor } from '../nav/registry';
 import { useAuth } from '../lib/auth';
-
-const NAV = [
-  { to: '/', label: 'Fleet', end: true },
-  { to: '/schools', label: 'Schools' },
-  { to: '/funnel', label: 'Funnel' },
-  { to: '/flags', label: 'Flags' },
-  { to: '/billing', label: 'Billing' },
-  { to: '/support', label: 'Support' },
-  { to: '/announcements', label: 'Announce' },
-  { to: '/referrals', label: 'Referrals' },
-];
 
 export function ControlShell() {
   const { session, logout } = useAuth();
+
+  // Server-driven: a Support Agent must not be shown the super-admin's nav.
+  const NAV = useMemo(
+    () =>
+      controlNavFor(session?.navManifest ?? []).map((n) => ({
+        to: n.path,
+        label: n.label,
+        end: n.end,
+      })),
+    [session?.navManifest],
+  );
 
   return (
     <div className="flex min-h-screen bg-grey-25">

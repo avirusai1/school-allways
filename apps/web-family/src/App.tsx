@@ -13,7 +13,9 @@ import { NotificationsPage } from './pages/NotificationsPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { ResultsPage } from './pages/ResultsPage';
+import { LibraryPage } from './pages/LibraryPage';
 import { StudentHomePage } from './pages/StudentHomePage';
+import { TimetablePage } from './pages/TimetablePage';
 import { FAMILY_NAV_REGISTRY } from './nav/registry';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -63,6 +65,8 @@ export function App() {
         <Route path="bus" element={<BusPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="privacy" element={<PrivacyPage />} />
+        <Route path="timetable" element={<TimetablePage />} />
+        <Route path="library" element={<LibraryPage />} />
         {/* Manifest keys with no screen yet: a placeholder, never a silent 404. */}
         {FAMILY_NAV_REGISTRY.filter((n) => !n.implemented).map((n) => (
           <Route

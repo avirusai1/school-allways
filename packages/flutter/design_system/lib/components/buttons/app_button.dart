@@ -43,26 +43,33 @@ class AppButton extends StatelessWidget {
         AppButtonSize.inline => 12,
       };
 
-  BorderRadius get _radius => switch (size) {
-        AppButtonSize.regular => AppRadius.borderMd,
-        _ => AppRadius.borderSm,
-      };
+  /// M3's defining button trait: filled/tonal/outlined/text buttons are
+  /// fully rounded (a "stadium" shape), not a fixed corner radius. Radius
+  /// equals half the height so it always resolves to a true pill regardless
+  /// of size.
+  BorderRadius _radiusFor(double height) => BorderRadius.circular(height / 2);
 
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
     final enabled = onPressed != null && !loading;
 
-    final (Color fill, Color text, BorderSide? border) = switch (variant) {
-      AppButtonVariant.primary => (t.accent, t.textOnAccent, null),
-      AppButtonVariant.secondary => (t.primary, t.textOnPrimary, null),
+    // M3 structure: Filled (primary/secondary here are both "filled", just
+    // different brand hues), Outlined, and Text. The overlay color drives the
+    // state layer — it must match what's ON that fill for enabled contrast,
+    // per M3's state-layer spec.
+    final (Color fill, Color text, BorderSide? border, Color overlayBase) =
+        switch (variant) {
+      AppButtonVariant.primary => (t.accent, t.textOnAccent, null, t.textOnAccent),
+      AppButtonVariant.secondary => (t.primary, t.textOnPrimary, null, t.textOnPrimary),
       AppButtonVariant.outline => (
           Colors.transparent,
           t.textPrimary,
-          BorderSide(color: t.borderStrong, width: 1),
+          BorderSide(color: t.outline, width: 1),
+          t.primary,
         ),
-      AppButtonVariant.ghost => (Colors.transparent, t.primary, null),
-      AppButtonVariant.danger => (t.danger, t.textOnPrimary, null),
+      AppButtonVariant.ghost => (Colors.transparent, t.primary, null, t.primary),
+      AppButtonVariant.danger => (t.danger, t.textOnPrimary, null, t.textOnPrimary),
     };
 
     final disabledFill = variant == AppButtonVariant.outline ||
@@ -90,8 +97,7 @@ class AppButton extends StatelessWidget {
     final hPad = variant == AppButtonVariant.ghost && size == AppButtonSize.regular
         ? 12.0
         : _hPad;
-    final radius =
-        variant == AppButtonVariant.ghost ? AppRadius.borderSm : _radius;
+    final radius = _radiusFor(height);
 
     final child = loading
         ? SizedBox(
@@ -129,7 +135,20 @@ class AppButton extends StatelessWidget {
         child: InkWell(
           onTap: enabled ? onPressed : null,
           borderRadius: radius,
-          // Pressed = 8% darker via splash; Material handles the overlay.
+          // M3 canonical state-layer opacities, keyed to whatever sits ON
+          // this fill (white text on a filled button, primary on outline/text).
+          overlayColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.pressed)) {
+              return overlayBase.withValues(alpha: 0.10);
+            }
+            if (states.contains(WidgetState.hovered)) {
+              return overlayBase.withValues(alpha: 0.08);
+            }
+            if (states.contains(WidgetState.focused)) {
+              return overlayBase.withValues(alpha: 0.10);
+            }
+            return null;
+          }),
           child: Ink(
             decoration: BoxDecoration(
               borderRadius: radius,

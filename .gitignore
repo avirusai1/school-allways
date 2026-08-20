@@ -75,3 +75,6 @@ db/migrations/meta/_journal.json.bak
 !/build/
 !/build/*.md
 HANDOFF.md
+
+# Local Claude Code tooling (machine-specific permissions, dev-server config)
+.claude/

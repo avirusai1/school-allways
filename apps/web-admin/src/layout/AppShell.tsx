@@ -10,8 +10,8 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
 
   const groups = useMemo(
-    () => groupNav(navForManifest(session?.navManifest ?? [])),
-    [session?.navManifest],
+    () => groupNav(navForManifest(session?.navManifest ?? [], session?.permissions ?? [])),
+    [session?.navManifest, session?.permissions],
   );
 
   const width = collapsed ? 64 : 240;

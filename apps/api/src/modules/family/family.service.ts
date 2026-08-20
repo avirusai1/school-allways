@@ -9,7 +9,10 @@ import {
   homework,
   homeworkSubmissions,
   leaveRequests,
+  periods,
   sections,
+  subjects,
+  timetableSlots,
   studentAttendance,
   studentEnrollments,
   studentDocuments,
@@ -426,6 +429,74 @@ export class FamilyService {
         homeworkDue: dueHomework,
         notices,
       };
+    });
+  }
+
+  /**
+   * The student's own weekly timetable.
+   *
+   * `timetable.read` is granted to the student, class teacher and several other
+   * roles, but no endpoint in the API had ever required it — the periods and
+   * timetable_slots tables have existed since the first migration with nothing
+   * reading them. Slots are effective-dated so a mid-year change does not
+   * rewrite history; only rows effective today are returned.
+   */
+  async selfTimetable(grant: GrantedPermission) {
+    const studentId = (grant.studentIds ?? [])[0];
+    if (!studentId) {
+      throw new NotFoundException('This account is not linked to a student record.');
+    }
+    assertInScope(grant, { studentId });
+
+    const day = new Date().toISOString().slice(0, 10);
+
+    return this.db.run(async (tx) => {
+      const [enrollment] = await tx
+        .select({ sectionId: studentEnrollments.sectionId })
+        .from(studentEnrollments)
+        .where(
+          and(
+            eq(studentEnrollments.studentId, studentId),
+            inArray(studentEnrollments.status, ['active', 'admitted', 'on_leave']),
+          ),
+        )
+        .limit(1);
+
+      if (!enrollment?.sectionId) {
+        return { data: [], sectionId: null };
+      }
+
+      const rows = await tx
+        .select({
+          id: timetableSlots.id,
+          weekday: timetableSlots.weekday,
+          roomNo: timetableSlots.roomNo,
+          subjectName: subjects.name,
+          periodName: periods.name,
+          sequence: periods.sequence,
+          startTime: periods.startTime,
+          endTime: periods.endTime,
+          isBreak: periods.isBreak,
+        })
+        .from(timetableSlots)
+        .innerJoin(periods, eq(periods.id, timetableSlots.periodId))
+        .leftJoin(subjects, eq(subjects.id, timetableSlots.subjectId))
+        .where(
+          and(
+            eq(timetableSlots.sectionId, enrollment.sectionId),
+            or(
+              isNull(timetableSlots.effectiveFrom),
+              lte(timetableSlots.effectiveFrom, day),
+            ),
+            or(
+              isNull(timetableSlots.effectiveTo),
+              gte(timetableSlots.effectiveTo, day),
+            ),
+          ),
+        )
+        .orderBy(timetableSlots.weekday, periods.sequence);
+
+      return { data: rows, sectionId: enrollment.sectionId };
     });
   }
 

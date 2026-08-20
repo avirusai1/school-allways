@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/theme_extensions.dart';
+import '../../tokens/radius.dart';
 import '../../tokens/spacing.dart';
 import '../../tokens/typography.dart';
 
@@ -16,7 +17,12 @@ class BottomNavItem {
   final String label;
 }
 
-/// Family-app bottom nav: max 5 items, amber active indicator bar on top.
+/// Family/admin-app bottom nav: max 5 items.
+///
+/// M3's navigation bar signature is a pill-shaped indicator BEHIND the
+/// selected icon — not a bar above it. This used to draw a 3px amber line at
+/// the top of the selected item (an M2-era pattern); the indicator now sits
+/// where M3 puts it, in the accent-container tone.
 class AppBottomNav extends StatelessWidget {
   const AppBottomNav({
     super.key,
@@ -35,7 +41,7 @@ class AppBottomNav extends StatelessWidget {
     final bottom = MediaQuery.paddingOf(context).bottom;
 
     return Container(
-      height: 60 + bottom,
+      height: 64 + bottom,
       decoration: BoxDecoration(
         color: t.surface,
         border: Border(top: BorderSide(color: t.border, width: 1)),
@@ -71,32 +77,43 @@ class _NavSlot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
-    final color = selected ? t.primary : t.textTertiary;
+    final iconColor = selected ? t.onAccentContainer : t.textTertiary;
+    final labelColor = selected ? t.textPrimary : t.textTertiary;
 
     return InkWell(
       onTap: onTap,
+      overlayColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.pressed)) return t.stateLayerPress;
+        if (states.contains(WidgetState.hovered)) return t.stateLayerHover;
+        return null;
+      }),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Active indicator: 3px amber bar at the top edge of the item.
-          Container(
-            height: 3,
-            width: double.infinity,
-            color: selected ? t.accent : Colors.transparent,
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            height: 32,
+            width: 56,
+            decoration: BoxDecoration(
+              color: selected ? t.accentContainer : Colors.transparent,
+              borderRadius: AppRadius.borderFull,
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              selected ? (item.activeIcon ?? item.icon) : item.icon,
+              size: 24,
+              color: iconColor,
+            ),
           ),
-          const Spacer(),
-          Icon(
-            selected ? (item.activeIcon ?? item.icon) : item.icon,
-            size: 24,
-            color: color,
-          ),
-          const SizedBox(height: AppSpacing.s1),
+          const SizedBox(height: 4),
           Text(
             item.label,
-            style: AppTypography.caption(color: color).copyWith(fontSize: 11),
+            style: AppTypography.caption(color: labelColor)
+                .copyWith(fontSize: 11, fontWeight: selected ? FontWeight.w600 : FontWeight.w500),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: AppSpacing.s1),
         ],
       ),
     );

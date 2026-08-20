@@ -30,7 +30,7 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-grey-25 px-4">
       <form
         onSubmit={(e) => void onSubmit(e)}
-        className="w-full max-w-md rounded-md border border-grey-200 bg-grey-0 p-6"
+        className="w-full max-w-md rounded-md bg-surface-container-low p-6"
       >
         <h1 className="text-h1 text-grey-900">Platform control</h1>
         <p className="mt-1 text-body-small text-grey-600">

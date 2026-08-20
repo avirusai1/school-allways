@@ -1,88 +1,62 @@
 #!/usr/bin/env bash
-# Build signed RELEASE builds (AAB for Play Store + a single APK for sideload
-# testing on your phone) for both apps, pointed at the production API.
+# Build SIGNED release AAB + universal APK for Play Store upload.
 #
-# Different purpose from build-android-local.sh: that one is for testing
-# against a locally-running API on an emulator/device. This one is for the
-# real thing — same signing, same API URL the published app will use.
-#
-# Requires (all already present as of 2026-08-18):
-#   apps/mobile-family/android/key.properties + upload-keystore.jks
-#   apps/mobile-admin/android/key.properties  + upload-keystore.jks
-#   apps/mobile-family/android/app/google-services.json
-#   apps/mobile-admin/android/app/google-services.json
-#
-# Usage:
-#   ./scripts/build-android-release.sh
+# Distinct from build-android-local.sh, which points the API at localhost and
+# only makes split APKs for device testing. This one bakes the PRODUCTION API
+# host and produces the .aab Play actually accepts.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-API_BASE_URL="https://api.school.techallways.com/v1"
+API_BASE_URL="${API_BASE_URL:-https://school.techallways.com/api/v1}"
 
+# Android Studio's bundled JDK — the system JDK here is 26, which Gradle/AGP
+# does not support.
 export JAVA_HOME="${JAVA_HOME:-/Applications/Android Studio.app/Contents/jbr/Contents/Home}"
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
 
 echo "==> API_BASE_URL=${API_BASE_URL}"
+echo "==> JAVA_HOME=${JAVA_HOME}"
 
-for app in mobile-family mobile-admin; do
-  ks="$ROOT/apps/$app/android/key.properties"
-  gs="$ROOT/apps/$app/android/app/google-services.json"
-  if [[ ! -f "$ks" ]]; then
-    echo "ERROR: $ks missing. Release build needs a real upload keystore — see docs/release-signing.md." >&2
-    exit 1
-  fi
-  if [[ ! -f "$gs" ]]; then
-    echo "ERROR: $gs missing. See docs/push-setup.md." >&2
-    exit 1
-  fi
-done
-
-echo "==> flutter pub get (packages + apps)"
 shopt -s nullglob
 for d in "$ROOT"/packages/flutter/*/ "$ROOT"/apps/mobile-family/ "$ROOT"/apps/mobile-admin/; do
   [[ -f "${d}pubspec.yaml" ]] || continue
-  echo "    ${d#"$ROOT"/}"
-  (cd "$d" && flutter pub get)
+  (cd "$d" && flutter pub get >/dev/null)
 done
+echo "==> deps resolved"
 
-OUT="$ROOT/dist/android-release"
-mkdir -p "$OUT"
+OUT="$ROOT/dist/play"
+rm -rf "$OUT"; mkdir -p "$OUT"
 
 build_app() {
-  local app="$1"
-  local name="$2"
+  local app="$1" name="$2"
   echo ""
-  echo "==> Building $name ($app) — app bundle (Play Store)"
-  (
-    cd "$ROOT/apps/$app"
-    flutter build appbundle --release --dart-define="API_BASE_URL=${API_BASE_URL}"
-  )
-  echo "==> Building $name ($app) — APK (sideload / phone testing)"
-  (
-    cd "$ROOT/apps/$app"
-    flutter build apk --release --dart-define="API_BASE_URL=${API_BASE_URL}"
-  )
+  echo "==> $name: verifying signing"
+  [[ -f "$ROOT/apps/$app/android/key.properties" ]] \
+    || { echo "MISSING key.properties for $app" >&2; exit 1; }
+  [[ -f "$ROOT/apps/$app/android/app/google-services.json" ]] \
+    || { echo "MISSING google-services.json for $app" >&2; exit 1; }
+
+  echo "==> $name: building app bundle (Play upload format)"
+  (cd "$ROOT/apps/$app" && flutter build appbundle --release \
+      --dart-define="API_BASE_URL=${API_BASE_URL}")
+
+  echo "==> $name: building universal APK (sideload / manual QA)"
+  (cd "$ROOT/apps/$app" && flutter build apk --release \
+      --dart-define="API_BASE_URL=${API_BASE_URL}")
 
   mkdir -p "$OUT/$name"
-  cp -f "$ROOT/apps/$app/build/app/outputs/bundle/release/app-release.aab" "$OUT/$name/${name}-release.aab"
-  cp -f "$ROOT/apps/$app/build/app/outputs/flutter-apk/app-release.apk" "$OUT/$name/${name}-release.apk"
-  echo "    copied to dist/android-release/$name/"
+  cp -f "$ROOT/apps/$app/build/app/outputs/bundle/release/"*.aab "$OUT/$name/" 2>/dev/null || true
+  cp -f "$ROOT/apps/$app/build/app/outputs/flutter-apk/app-release.apk" \
+        "$OUT/$name/${name}-release.apk" 2>/dev/null || true
 }
 
 build_app mobile-family family
 build_app mobile-admin admin
 
 echo ""
-echo "Done."
-echo ""
-ls -lh "$OUT"/family "$OUT"/admin
-echo ""
-echo "Play Store upload:  dist/android-release/family/family-release.aab"
-echo "                    dist/android-release/admin/admin-release.aab"
-echo ""
-echo "Install on your phone to test (USB debugging on, phone connected):"
-echo "  adb install -r dist/android-release/family/family-release.apk"
-echo "  adb install -r dist/android-release/admin/admin-release.apk"
+echo "=========================================="
+ls -lh "$OUT"/*/* 2>/dev/null
+echo "=========================================="

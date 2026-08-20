@@ -27,24 +27,34 @@ abstract final class AppSpacing {
   static const double lineGap = 2;
 }
 
+/// M3 canonical shape scale (extra-small/small/medium/large/extra-large/full).
+/// `lg` already matched M3's "large" (16) before this revamp; `sm`/`md` are
+/// retuned from 6/10 to M3's 8/12, and `xl` (28, used by dialogs and full-
+/// screen sheets) is new.
 abstract final class AppRadius {
-  static const double sm = 6;
-  static const double md = 10;
+  static const double xs = 4;
+  static const double sm = 8;
+  static const double md = 12;
   static const double lg = 16;
+  static const double xl = 28;
   static const double full = 999;
 
+  static final BorderRadius xsAll = BorderRadius.circular(xs);
   static final BorderRadius smAll = BorderRadius.circular(sm);
   static final BorderRadius mdAll = BorderRadius.circular(md);
   static final BorderRadius lgAll = BorderRadius.circular(lg);
+  static final BorderRadius xlAll = BorderRadius.circular(xl);
   static final BorderRadius fullAll = BorderRadius.circular(full);
 
   /// Aliases used by ThemeData factories and components.
+  static final BorderRadius borderXs = xsAll;
   static final BorderRadius borderSm = smAll;
   static final BorderRadius borderMd = mdAll;
   static final BorderRadius borderLg = lgAll;
+  static final BorderRadius borderXl = xlAll;
   static final BorderRadius borderFull = fullAll;
   static const BorderRadius sheetTop = BorderRadius.vertical(
-    top: Radius.circular(lg),
+    top: Radius.circular(xl),
   );
 }
 
