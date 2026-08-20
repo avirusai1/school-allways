@@ -286,7 +286,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # VITE_API_BASE_URL is baked in at BUILD time, not read at runtime — every
+      # app defaults to http://localhost:3001/v1 (see apps/*/src/lib/api.ts) if
+      # this isn't set here, which is exactly the bug that shipped in the first
+      # deploy-production run (2026-08-19): the built app called localhost from
+      # the visitor's own browser instead of the real public API.
       - name: Build web apps (admin, family, control — no native deps, safe to build here)
+        env:
+          VITE_API_BASE_URL: https://school.techallways.com/api/v1
         run: |
           pnpm --filter @saw/web-admin build
           pnpm --filter @saw/web-family build
