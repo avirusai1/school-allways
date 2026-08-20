@@ -158,8 +158,9 @@ jobs:
             key_password_secret: ADMIN_ANDROID_KEY_PASSWORD
             google_services_secret: ADMIN_GOOGLE_SERVICES_JSON_BASE64
     env:
-      # Staging/pilot API. Override with repo variable MOBILE_API_BASE_URL.
-      MOBILE_API_BASE_URL: ${{ vars.MOBILE_API_BASE_URL || 'https://api.school.techallways.com/v1' }}
+      # Production API (path-routed on the single domain; there is no api. subdomain).
+      # Override with repo variable MOBILE_API_BASE_URL.
+      MOBILE_API_BASE_URL: ${{ vars.MOBILE_API_BASE_URL || 'https://school.techallways.com/api/v1' }}
       ANDROID_KEYSTORE_BASE64: ${{ secrets[matrix.keystore_secret] }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets[matrix.store_password_secret] }}
       # Both keystores use alias `upload` (see scripts/create-upload-keystores.sh).

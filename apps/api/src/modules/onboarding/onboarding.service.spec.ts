@@ -12,6 +12,13 @@ describe('OnboardingService.markActivated', () => {
   const notifications = { notify: vi.fn() };
   const growth = { grantRewardIfActivated: vi.fn().mockResolvedValue(null) };
 
+  const config = {
+    getOrThrow: vi.fn((key: string) => {
+      if (key === 'FILES_BASE_URL') return 'https://files.example.com';
+      throw new Error(key);
+    }),
+  };
+
   let service: OnboardingService;
 
   beforeEach(() => {
@@ -21,6 +28,7 @@ describe('OnboardingService.markActivated', () => {
       notifications as never,
       growth as never,
       { writeBuffer: vi.fn(), readBuffer: vi.fn() } as never,
+      config as never,
     );
   });
 
@@ -65,6 +73,13 @@ describe('OnboardingService.completeStep evidence', () => {
   const growth = { grantRewardIfActivated: vi.fn() };
   const storage = { writeBuffer: vi.fn() };
 
+  const config = {
+    getOrThrow: vi.fn((key: string) => {
+      if (key === 'FILES_BASE_URL') return 'https://files.example.com';
+      throw new Error(key);
+    }),
+  };
+
   let service: OnboardingService;
 
   beforeEach(() => {
@@ -74,6 +89,7 @@ describe('OnboardingService.completeStep evidence', () => {
       notifications as never,
       growth as never,
       storage as never,
+      config as never,
     );
   });
 
