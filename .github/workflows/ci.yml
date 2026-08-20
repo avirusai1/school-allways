@@ -342,6 +342,7 @@ jobs:
             pnpm --filter @saw/api build
             set -a; source apps/api/.env.production; set +a
             pnpm db:migrate
+            pnpm db:seed
             sudo systemctl restart saw-api
             sleep 3
             sudo systemctl is-active saw-api
