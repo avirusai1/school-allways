@@ -3,6 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiException } from '../../common/errors/api.exception';
 import { ExamsService } from './exams.service';
 
+const config = {
+  getOrThrow: vi.fn((key: string) => {
+    if (key === 'FILES_BASE_URL') return 'https://files.example.com';
+    throw new Error(key);
+  }),
+};
+
+
 describe('ExamsService gates & moderation', () => {
   const tx = {
     select: vi.fn(),
@@ -40,7 +48,7 @@ describe('ExamsService gates & moderation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    service = new ExamsService(db as never, queue as never);
+    service = new ExamsService(db as never, queue as never, config as never);
   });
 
   it('hides timetable from self-scope when isTimetablePublished is false', async () => {

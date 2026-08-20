@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import {
@@ -50,6 +51,7 @@ export class ExamsService {
   constructor(
     private readonly db: TenantDbService,
     private readonly queue: ExamsQueueService,
+    private readonly config: ConfigService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -1335,7 +1337,7 @@ export class ExamsService {
       }
 
       // Signed URL stub — StorageService lands with the files module.
-      const base = process.env.FILES_BASE_URL ?? 'http://localhost:3000/files';
+      const base = this.config.getOrThrow<string>('FILES_BASE_URL');
       return {
         studentId,
         examId,

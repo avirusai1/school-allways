@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 
 import {
@@ -77,12 +78,12 @@ export class OnboardingService {
     private readonly notifications: NotificationService,
     private readonly growth: GrowthService,
     private readonly storage: StorageService,
+    private readonly config: ConfigService,
   ) {}
 
   async getState() {
     const ctx = RequestContextStore.get();
-    const filesBase =
-      process.env.FILES_BASE_URL ?? 'http://localhost:3001/files';
+    const filesBase = this.config.getOrThrow<string>('FILES_BASE_URL');
     return this.db.run(async (tx) => {
       const [tenant] = await tx
         .select({
@@ -310,8 +311,7 @@ export class OnboardingService {
         .where(eq(tenants.id, ctx.tenantId!));
     });
 
-    const filesBase =
-      process.env.FILES_BASE_URL ?? 'http://localhost:3001/files';
+    const filesBase = this.config.getOrThrow<string>('FILES_BASE_URL');
     return { logoPath: key, logoUrl: publicFileUrl(filesBase, key) };
   }
 

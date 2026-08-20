@@ -74,3 +74,4 @@ db/migrations/meta/_journal.json.bak
 # These negations must stay at the end of the file — later rules win.
 !/build/
 !/build/*.md
+HANDOFF.md

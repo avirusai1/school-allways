@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 
@@ -38,6 +39,7 @@ export class FamilyService {
     private readonly transport: TransportService,
     private readonly storage: StorageService,
     private readonly subscriptions: SubscriptionAccessService,
+    private readonly config: ConfigService,
   ) {}
 
   async home(studentId: string, grant: GrantedPermission) {
@@ -429,7 +431,7 @@ export class FamilyService {
     const data = file.buffer?.length ? file.buffer : await fs.readFile(file.path);
     await this.storage.writeBuffer(key, data);
 
-    const filesBase = process.env.FILES_BASE_URL ?? 'http://localhost:3001/files';
+    const filesBase = this.config.getOrThrow<string>('FILES_BASE_URL');
     return { photoPath: key, photoUrl: publicFileUrl(filesBase, key) };
   }
 
@@ -484,7 +486,7 @@ export class FamilyService {
         }),
     );
 
-    const filesBase = process.env.FILES_BASE_URL ?? 'http://localhost:3001/files';
+    const filesBase = this.config.getOrThrow<string>('FILES_BASE_URL');
     return {
       id: row!.id,
       docType: row!.docType,

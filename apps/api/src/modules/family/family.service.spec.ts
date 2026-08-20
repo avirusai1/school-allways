@@ -3,6 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 import type { GrantedPermission } from '../../common/context/request-context';
 import { FamilyService } from './family.service';
 
+const config = {
+  getOrThrow: vi.fn((key: string) => {
+    if (key === 'FILES_BASE_URL') return 'https://files.example.com';
+    throw new Error(key);
+  }),
+};
+
+
 const subscriptions = {
   statusForStudents: vi.fn(async (ids: string[]) => {
     const map = new Map();
@@ -75,7 +83,7 @@ describe('FamilyService.listChildren', () => {
     const transport = {
       familyBusForStudent: vi.fn().mockResolvedValue(null),
     };
-    const svc = new FamilyService(emptyDb as never, fees as never, transport as never, storage as never, subscriptions as never);
+    const svc = new FamilyService(emptyDb as never, fees as never, transport as never, storage as never, subscriptions as never, config as never);
     const result = await svc.listChildren(grant);
     expect(result.data).toEqual([]);
   });
@@ -84,7 +92,7 @@ describe('FamilyService.listChildren', () => {
     const transport = {
       familyBusForStudent: vi.fn().mockResolvedValue(null),
     };
-    const service = new FamilyService(db as never, fees as never, transport as never, storage as never, subscriptions as never);
+    const service = new FamilyService(db as never, fees as never, transport as never, storage as never, subscriptions as never, config as never);
     const grant: GrantedPermission = {
       code: 'family.child.read',
       scope: 'self',
@@ -127,7 +135,7 @@ describe('FamilyService.updateChildProfile', () => {
     };
     return {
       written,
-      service: new FamilyService(db as never, fees as never, transport as never, storage as never, subscriptions as never),
+      service: new FamilyService(db as never, fees as never, transport as never, storage as never, subscriptions as never, config as never),
     };
   }
 
