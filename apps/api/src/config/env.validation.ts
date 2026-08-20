@@ -151,6 +151,18 @@ export const envSchema = z
           'Without it a school can complete signup and then have nowhere to go.',
       });
     }
+
+    // Parent/student invites are built from this. Unset used to fall back to a
+    // subdomain that has never existed, so invites silently pointed nowhere.
+    if (env.NODE_ENV === 'production' && !env.FAMILY_WEB_URL) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['FAMILY_WEB_URL'],
+        message:
+          'Parent and student invite links are built from this URL. ' +
+          'Set FAMILY_WEB_URL in production.',
+      });
+    }
     if (env.NODE_ENV === 'production' && env.JWT_ACCESS_SECRET === env.JWT_REFRESH_SECRET) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

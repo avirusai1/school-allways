@@ -82,6 +82,20 @@ export class FamilyController {
     return this.service.home(query.studentId, grant);
   }
 
+  /**
+   * Student's own home feed.
+   *
+   * Students hold `student.self.read`, never `family.child.read` — see the
+   * `student` role in db/seeds/roles.ts. Before this existed the permission
+   * was granted but no endpoint served it, so a student who logged in landed
+   * on the guardian home and was correctly refused by the guard.
+   */
+  @Get('me')
+  @RequirePermission('student.self.read')
+  me(@Grant('student.self.read') grant: GrantedPermission) {
+    return this.service.selfHome(grant);
+  }
+
   @Get('children')
   @RequirePermission('family.child.read')
   children(@Grant('family.child.read') grant: GrantedPermission) {

@@ -29,6 +29,27 @@ class FamilyHomeRepository {
     }
   }
 
+  /// Student's own feed.
+  ///
+  /// `/family/home` and `/family/children` both require `family.child.read`,
+  /// which the `student` role deliberately withholds — so a student hitting
+  /// them gets a 403, and the catch-all below used to hide that behind a fake
+  /// "Your child" placeholder. `/family/me` is the student-scoped equivalent
+  /// and returns the same JSON keys, so FamilyHome parses it unchanged.
+  Future<FamilyHome> fetchSelf() async {
+    try {
+      final res = await _api.get<Map<String, dynamic>>('/family/me');
+      final data = res.data ?? const <String, dynamic>{};
+      final id = (data['student'] as Map<String, dynamic>?)?['id'] as String?;
+      if (id != null && id.isNotEmpty) {
+        await _prefs.setString(_cacheKey(id), jsonEncode(data));
+      }
+      return FamilyHome.fromJson(data);
+    } catch (_) {
+      return FamilyHome.empty(studentId: '', name: 'You');
+    }
+  }
+
   Future<FamilyHome> fetch(String studentId) async {
     try {
       final res = await _api.get<Map<String, dynamic>>(

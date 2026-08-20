@@ -251,6 +251,184 @@ export class FamilyService {
     });
   }
 
+  /**
+   * Student's own home feed.
+   *
+   * A student is NOT a guardian: the `student` role deliberately withholds
+   * `family.child.read` (that permission means "view own children"). So this
+   * deliberately mirrors `home()` minus everything the role is denied —
+   * no fees, no bus, no sibling switcher. Adding those here would hand a
+   * child data the role explicitly negates with `!fee.invoice.read`.
+   */
+  async selfHome(grant: GrantedPermission) {
+    const studentId = (grant.studentIds ?? [])[0];
+    if (!studentId) {
+      throw new NotFoundException(
+        'This account is not linked to a student record.',
+      );
+    }
+    assertInScope(grant, { studentId });
+
+    const day = new Date().toISOString().slice(0, 10);
+    const filesBase = this.config.getOrThrow<string>('FILES_BASE_URL');
+
+    return this.db.run(async (tx) => {
+      const [student] = await tx
+        .select({
+          id: students.id,
+          firstName: students.firstName,
+          lastName: students.lastName,
+          photoPath: students.photoPath,
+          className: classes.name,
+          sectionName: sections.name,
+          rollNo: studentEnrollments.rollNo,
+        })
+        .from(students)
+        .leftJoin(
+          studentEnrollments,
+          and(
+            eq(studentEnrollments.studentId, students.id),
+            inArray(studentEnrollments.status, ['active', 'admitted', 'on_leave']),
+          ),
+        )
+        .leftJoin(classes, eq(classes.id, studentEnrollments.classId))
+        .leftJoin(sections, eq(sections.id, studentEnrollments.sectionId))
+        .where(eq(students.id, studentId))
+        .limit(1);
+
+      if (!student) throw new NotFoundException('Student not found');
+
+      const [attendanceToday] = await tx
+        .select({ status: studentAttendance.status, inTime: studentAttendance.inTime })
+        .from(studentAttendance)
+        .where(
+          and(
+            eq(studentAttendance.studentId, studentId),
+            eq(studentAttendance.day, day),
+          ),
+        )
+        .limit(1);
+
+      const dueHomework = await tx
+        .select({
+          id: homework.id,
+          title: homework.title,
+          dueOn: homework.dueOn,
+          subjectId: homework.subjectId,
+          submissionStatus: homeworkSubmissions.status,
+        })
+        .from(homeworkSubmissions)
+        .innerJoin(homework, eq(homework.id, homeworkSubmissions.homeworkId))
+        .where(
+          and(
+            eq(homeworkSubmissions.studentId, studentId),
+            eq(homework.status, 'published'),
+            inArray(homeworkSubmissions.status, ['pending', 'submitted']),
+            or(isNull(homework.dueOn), gte(homework.dueOn, day)),
+          ),
+        )
+        .orderBy(homework.dueOn)
+        .limit(10);
+
+      const overdue = await tx
+        .select({ id: homework.id, title: homework.title, dueOn: homework.dueOn })
+        .from(homeworkSubmissions)
+        .innerJoin(homework, eq(homework.id, homeworkSubmissions.homeworkId))
+        .where(
+          and(
+            eq(homeworkSubmissions.studentId, studentId),
+            eq(homework.status, 'published'),
+            eq(homeworkSubmissions.status, 'pending'),
+            sql`${homework.dueOn} IS NOT NULL AND ${homework.dueOn} < ${day}`,
+          ),
+        )
+        .limit(5);
+
+      const notices = await tx
+        .select({
+          id: announcements.id,
+          title: announcements.title,
+          body: announcements.body,
+          type: announcements.type,
+          sentAt: announcements.sentAt,
+        })
+        .from(announcements)
+        .where(
+          and(
+            eq(announcements.status, 'approved'),
+            or(isNull(announcements.sentAt), lte(announcements.sentAt, sql`now()`)),
+          ),
+        )
+        .orderBy(desc(announcements.sentAt))
+        .limit(5);
+
+      const classLabel =
+        student.className && student.sectionName
+          ? `${student.className}-${student.sectionName}`
+          : student.className ?? null;
+
+      const attendanceLabel = (() => {
+        switch (attendanceToday?.status) {
+          case 'present':
+            return attendanceToday?.inTime ? `Present · ${attendanceToday.inTime}` : 'Present';
+          case 'absent':
+            return 'Absent';
+          case 'late':
+            return 'Late';
+          case 'half_day':
+            return 'Half day';
+          case 'on_leave':
+            return 'On leave';
+          default:
+            return 'Not marked yet';
+        }
+      })();
+
+      const dueTodayCount = dueHomework.filter(
+        (h) => h.dueOn === day || h.dueOn == null,
+      ).length;
+
+      /**
+       * Deliberately the SAME key names as `home()` so the existing clients
+       * parse this with no model changes — `FamilyHome.fromJson` is fully
+       * null-tolerant, so the omitted `bus`/`feesDuePaise` simply read as
+       * absent rather than needing a second contract.
+       */
+      return {
+        locked: false,
+        student: {
+          id: student.id,
+          fullName: `${student.firstName} ${student.lastName ?? ''}`.trim(),
+          firstName: student.firstName,
+          lastName: student.lastName ?? null,
+          photoPath: student.photoPath ?? null,
+          photoUrl: publicFileUrl(filesBase, student.photoPath),
+          classLabel,
+          rollNo: student.rollNo ?? null,
+        },
+        today: {
+          label: 'TODAY',
+          day,
+          attendance: {
+            status: attendanceToday?.status ?? 'not_marked',
+            label: attendanceLabel,
+          },
+          homeworkDueCount: dueTodayCount,
+          // A student holds `!fee.invoice.read` / `!fee.status.read`. Zero here
+          // is not "nothing owed" — fees are simply not this role's business.
+          feesDuePaise: 0,
+        },
+        needsAttention: overdue.map((item) => ({
+          severity: 'orange' as const,
+          title: `Homework overdue: ${item.title}`,
+          route: `/homework/${item.id}`,
+        })),
+        homeworkDue: dueHomework,
+        notices,
+      };
+    });
+  }
+
   async listChildren(grant: GrantedPermission) {
     const ids = grant.studentIds ?? [];
     if (grant.scope === 'self' && ids.length === 0) {

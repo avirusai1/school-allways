@@ -28,10 +28,21 @@ export function useSelectedChild() {
   const { session } = useAuth();
   const tenantId = session?.tenant.id;
 
+  /**
+   * A student is not a guardian. `/family/children` requires
+   * `family.child.read`, which the `student` role deliberately withholds, so
+   * calling it as a student is a guaranteed 403 — which is exactly how every
+   * per-child screen (books, results) used to break for students even though
+   * they hold `book.read` and `exam.marks.read`. Their own id already arrives
+   * on the session as `scopes.studentIds`, so resolve it locally instead.
+   */
+  const isStudent = session?.user?.kind === 'student';
+  const ownStudentId = session?.scopes?.studentIds?.[0] ?? null;
+
   const childrenQuery = useQuery({
     queryKey: ['family', 'children'],
     queryFn: () => apiFetch<{ data: FamilyChild[] }>('/family/children'),
-    enabled: !!session,
+    enabled: !!session && !isStudent,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -40,7 +51,19 @@ export function useSelectedChild() {
     return localStorage.getItem(storageKey(tenantId));
   });
 
-  const children = childrenQuery.data?.data ?? [];
+  const selfChild: FamilyChild[] =
+    isStudent && ownStudentId
+      ? [
+          {
+            id: ownStudentId,
+            fullName: session?.user?.fullName ?? 'Me',
+            firstName: session?.user?.displayName ?? session?.user?.fullName ?? 'Me',
+            photoPath: null,
+          },
+        ]
+      : [];
+
+  const children = isStudent ? selfChild : (childrenQuery.data?.data ?? []);
 
   useEffect(() => {
     if (!tenantId || children.length === 0) return;
@@ -66,7 +89,12 @@ export function useSelectedChild() {
 
   return {
     children,
-    childrenQuery,
+    // Students never issue the guardian query; report it as settled so callers
+    // that gate on `isPending` do not spin forever on a query that never runs.
+    childrenQuery: isStudent
+      ? ({ isPending: false, isError: false, isSuccess: true, refetch: () => {} } as unknown as typeof childrenQuery)
+      : childrenQuery,
+    isStudent,
     selectedChild,
     studentId: selectedChild?.id ?? null,
     setSelectedChildId,

@@ -176,3 +176,82 @@ describe('FamilyService.updateChildProfile', () => {
     });
   });
 });
+
+describe('FamilyService.selfHome', () => {
+  function build(rows: Record<string, unknown[]>) {
+    let call = 0;
+    // Query order in selfHome(): student, attendance, dueHomework, overdue, notices.
+    const order = ['student', 'attendance', 'homework', 'overdue', 'notices'];
+    const chain = () => {
+      const key = order[call++] ?? 'notices';
+      const c: Record<string, unknown> = {};
+      const self = () => c;
+      c.from = self;
+      c.innerJoin = self;
+      c.leftJoin = self;
+      c.where = self;
+      c.orderBy = self;
+      c.limit = () => Promise.resolve(rows[key] ?? []);
+      Object.assign(c, {
+        then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) =>
+          Promise.resolve(rows[key] ?? []).then(res, rej),
+      });
+      return c;
+    };
+    const db = {
+      run: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select: () => chain() }),
+      ),
+    };
+    return new FamilyService(
+      db as never,
+      { outstandingPaiseForStudent: vi.fn() } as never,
+      {} as never,
+      { writeBuffer: vi.fn() } as never,
+      subscriptions as never,
+      config as never,
+    );
+  }
+
+  const grant: GrantedPermission = {
+    code: 'student.self.read',
+    scope: 'self',
+    sectionIds: [],
+    subjectIds: [],
+    studentIds: ['stu-1'],
+  };
+
+  it('returns the student their own feed without any fee figure', async () => {
+    const svc = build({
+      student: [
+        {
+          id: 'stu-1',
+          firstName: 'Aadhya',
+          lastName: 'Shetty',
+          photoPath: null,
+          className: '5',
+          sectionName: 'A',
+          rollNo: '12',
+        },
+      ],
+      attendance: [{ status: 'present', inTime: '08:41' }],
+      homework: [],
+      overdue: [],
+      notices: [],
+    });
+
+    const res = await svc.selfHome(grant);
+    expect(res.student.id).toBe('stu-1');
+    expect(res.student.classLabel).toBe('5-A');
+    // A student holds !fee.invoice.read — the feed must never carry a real figure.
+    expect(res.today.feesDuePaise).toBe(0);
+    expect(res).not.toHaveProperty('bus');
+  });
+
+  it('refuses an account with no linked student record', async () => {
+    const svc = build({});
+    await expect(
+      svc.selfHome({ ...grant, studentIds: [] }),
+    ).rejects.toThrow(/not linked to a student/i);
+  });
+});

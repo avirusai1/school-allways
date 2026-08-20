@@ -10,8 +10,11 @@ import { JoinPage } from './pages/JoinPage';
 import { LeavePage } from './pages/LeavePage';
 import { LoginPage } from './pages/LoginPage';
 import { NotificationsPage } from './pages/NotificationsPage';
+import { PlaceholderPage } from './pages/PlaceholderPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { ResultsPage } from './pages/ResultsPage';
+import { StudentHomePage } from './pages/StudentHomePage';
+import { FAMILY_NAV_REGISTRY } from './nav/registry';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -24,6 +27,18 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   }
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return children;
+}
+
+/**
+ * The landing screen is the server's call, not the client's.
+ *
+ * `session.homeScreen` was previously ignored by every web app, so a student —
+ * whose role declares `homeScreen: 'student_home'` — was dropped on the
+ * guardian home and refused by the API guard.
+ */
+function HomeRoute() {
+  const { session } = useAuth();
+  return session?.homeScreen === 'student_home' ? <StudentHomePage /> : <HomePage />;
 }
 
 export function App() {
@@ -39,7 +54,7 @@ export function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<HomePage />} />
+        <Route index element={<HomeRoute />} />
         <Route path="fees" element={<FeesPage />} />
         <Route path="results" element={<ResultsPage />} />
         <Route path="diary" element={<DiaryPage />} />
@@ -48,6 +63,14 @@ export function App() {
         <Route path="bus" element={<BusPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="privacy" element={<PrivacyPage />} />
+        {/* Manifest keys with no screen yet: a placeholder, never a silent 404. */}
+        {FAMILY_NAV_REGISTRY.filter((n) => !n.implemented).map((n) => (
+          <Route
+            key={n.key}
+            path={n.path.replace(/^\//, '')}
+            element={<PlaceholderPage title={n.label} />}
+          />
+        ))}
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

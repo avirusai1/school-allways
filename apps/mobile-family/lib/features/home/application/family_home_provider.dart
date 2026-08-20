@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:core_auth/core_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -24,7 +25,12 @@ final familyHomeRepositoryProvider = Provider<FamilyHomeRepository>((ref) {
   );
 });
 
+bool _isStudent(Ref ref) =>
+    ref.read(sessionProvider).valueOrNull?.user.kind == 'student';
+
 final childrenProvider = FutureProvider<List<ChildSummary>>((ref) async {
+  // Guardian-only endpoint; a student would get a 403 and a fake demo child.
+  if (_isStudent(ref)) return const <ChildSummary>[];
   return ref.watch(familyHomeRepositoryProvider).listChildren();
 });
 
@@ -43,6 +49,12 @@ class FamilyHomeNotifier extends AsyncNotifier<FamilyHome> {
   @override
   Future<FamilyHome> build() async {
     await ref.watch(sharedPreferencesProvider.future);
+
+    // A student is not a guardian: no child list, no switcher, own feed.
+    if (_isStudent(ref)) {
+      return ref.read(familyHomeRepositoryProvider).fetchSelf();
+    }
+
     final children = await ref.watch(childrenProvider.future);
     // Rebuild when the active child changes.
     ref.watch(childSwitcherProvider);
@@ -75,6 +87,13 @@ class FamilyHomeNotifier extends AsyncNotifier<FamilyHome> {
   }
 
   Future<void> refresh() async {
+    if (_isStudent(ref)) {
+      state = const AsyncLoading<FamilyHome>().copyWithPrevious(state);
+      state = await AsyncValue.guard(
+        () => ref.read(familyHomeRepositoryProvider).fetchSelf(),
+      );
+      return;
+    }
     final studentId = ref.read(childSwitcherProvider).valueOrNull;
     if (studentId == null || studentId.isEmpty) return;
     try {

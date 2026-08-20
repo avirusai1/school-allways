@@ -20,7 +20,7 @@ import { StaffAccountsPage } from './pages/StaffAccountsPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { StudentsPage } from './pages/StudentsPage';
 import { SubscriptionsPage } from './pages/SubscriptionsPage';
-import { NAV_REGISTRY } from './nav/registry';
+import { NAV_REGISTRY, navForManifest } from './nav/registry';
 
 const REAL_NAV_IDS = new Set([
   'dashboard',
@@ -49,6 +49,34 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   }
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return children;
+}
+
+/**
+ * The admin landing screen.
+ *
+ * This route used to render <DashboardPage /> for every role. That page calls
+ * `/dashboard/principal`, which requires `dashboard.principal.read` — a
+ * permission 22 of the 26 admin roles do not hold. A teacher, cashier,
+ * librarian, driver or security guard therefore logged in straight onto a
+ * permission error, the same failure a student hit on the family app.
+ *
+ * The server already says where each role belongs, so honour it: only roles
+ * that can actually read the dashboard get it; everyone else lands on the
+ * first screen their own nav manifest grants.
+ */
+function AdminHomeRoute() {
+  const { session } = useAuth();
+
+  if (session?.permissions?.includes('dashboard.principal.read')) {
+    return <DashboardPage />;
+  }
+
+  const nav = navForManifest(session?.navManifest ?? []).filter(
+    (n) => n.id !== 'dashboard',
+  );
+  if (nav.length > 0) return <Navigate to={nav[0]!.path} replace />;
+
+  return <PlaceholderPage title={session?.roles?.[0]?.name ?? 'Home'} />;
 }
 
 export function App() {
@@ -87,7 +115,7 @@ export function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<DashboardPage />} />
+        <Route index element={<AdminHomeRoute />} />
         <Route path="approvals" element={<ApprovalsPage />} />
         <Route path="students" element={<StudentsPage />} />
         <Route path="subscriptions" element={<SubscriptionsPage />} />
