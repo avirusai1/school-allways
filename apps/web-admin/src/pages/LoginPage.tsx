@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Button, TextField } from '@saw/ui';
+import { Brand, Button, TextField } from '@saw/ui';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 
@@ -34,7 +34,7 @@ export function LoginPage() {
         onSubmit={(e) => void onSubmit(e)}
         className="w-full max-w-md rounded-md bg-surface-container p-6 shadow-sm"
       >
-        <h1 className="text-h1 text-grey-900">School All Ways</h1>
+        <Brand size="large" className="mb-4" />
         <p className="mt-1 text-body-small text-grey-600">Staff sign-in for the admin console</p>
         <div className="mt-6 flex flex-col gap-4">
           <TextField

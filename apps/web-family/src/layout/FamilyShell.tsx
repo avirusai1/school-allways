@@ -1,11 +1,18 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Button } from '@saw/ui';
+import { applyTenantBrand, Brand, Button } from '@saw/ui';
 import { familyNavFor } from '../nav/registry';
 import { useAuth } from '../lib/auth';
 
 export function FamilyShell() {
   const { session, logout } = useAuth();
+
+  // White-label: regenerate the whole blue ramp from the tenant's chosen
+  // color. Restores the platform default on unmount.
+  useEffect(() => {
+    applyTenantBrand(session?.tenant.primaryColor);
+    return () => applyTenantBrand(null);
+  }, [session?.tenant.primaryColor]);
 
   // Server-driven, per roles.ts: "Never hardcode role→screen mapping in the
   // app, or every permission tweak becomes a Play Store release."
@@ -23,7 +30,7 @@ export function FamilyShell() {
     <div className="flex min-h-screen flex-col bg-grey-25 md:flex-row">
       <aside className="hidden w-56 shrink-0 border-r border-grey-200 bg-grey-0 md:flex md:flex-col">
         <div className="border-b border-grey-100 px-4 py-4">
-          <div className="text-[15px] font-semibold text-blue-700">School All Ways</div>
+          <Brand logoUrl={session?.tenant.logoUrl} name={session?.tenant.name} />
           <div className="mt-1 truncate text-[12px] text-grey-500">
             {session?.tenant.name}
           </div>
@@ -54,7 +61,7 @@ export function FamilyShell() {
 
       <div className="flex min-w-0 flex-1 flex-col pb-16 md:pb-0">
         <header className="flex h-14 items-center justify-between border-b border-grey-200 bg-grey-0 px-4 md:hidden">
-          <div className="text-[15px] font-semibold text-blue-700">School All Ways</div>
+          <Brand logoUrl={session?.tenant.logoUrl} name={session?.tenant.name} />
           <Button variant="ghost" size="inline" onClick={() => void logout()}>
             Out
           </Button>

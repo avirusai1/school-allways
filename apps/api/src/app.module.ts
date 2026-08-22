@@ -26,6 +26,7 @@ import { HomeworkModule } from './modules/homework/homework.module';
 import { ImportModule } from './modules/import/import.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
+import { SettingsModule } from './modules/settings/settings.module';
 import { FamilyModule } from './modules/family/family.module';
 import { FeesModule } from './modules/fees/fees.module';
 import { PlatformModule } from './modules/platform/platform.module';
@@ -74,6 +75,7 @@ import { validateEnv } from './config/env.validation';
     PlatformModule,
     GrowthModule,
     OnboardingModule,
+    SettingsModule,
     FamilyModule,
     FeesModule,
     SubscriptionsModule,

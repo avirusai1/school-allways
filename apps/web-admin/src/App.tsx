@@ -22,6 +22,7 @@ import { NotificationsPage } from './pages/NotificationsPage';
 import { StudentsPage } from './pages/StudentsPage';
 import { SubscriptionsPage } from './pages/SubscriptionsPage';
 import { NAV_REGISTRY, navForManifest } from './nav/registry';
+import { SettingsPage } from './pages/SettingsPage';
 
 const REAL_NAV_IDS = new Set([
   'dashboard',
@@ -37,6 +38,7 @@ const REAL_NAV_IDS = new Set([
   'academics.subjects',
   'attendance',
   'staff_attendance',
+  'settings',
 ]);
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -130,6 +132,7 @@ export function App() {
         <Route path="imports/:id" element={<ImportPage />} />
         <Route path="students/imports" element={<Navigate to="/imports" replace />} />
         <Route path="attendance" element={<AttendancePage />} />
+        <Route path="settings" element={<SettingsPage />} />
         <Route path="staff/attendance" element={<StaffAttendancePage />} />
         <Route path="setup/classes" element={<ClassesPage />} />
         <Route path="setup/subjects" element={<SubjectsPage />} />

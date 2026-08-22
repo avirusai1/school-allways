@@ -22,7 +22,10 @@ export function ControlShell() {
     <div className="flex min-h-screen bg-grey-25">
       <aside className="flex w-56 shrink-0 flex-col border-r border-grey-200 bg-grey-0">
         <div className="border-b border-grey-100 px-4 py-4">
-          <div className="text-[15px] font-semibold text-blue-700">Control</div>
+          <div className="flex items-center gap-2">
+            <img src="/control/brand/logo.png" alt="School Allways" className="h-7 w-7 object-contain" />
+            <span className="text-[15px] font-semibold text-blue-700">Control</span>
+          </div>
           <div className="mt-1 text-[12px] text-grey-500">Platform · IP-restricted</div>
         </div>
         <nav className="flex flex-1 flex-col gap-0.5 p-2">
