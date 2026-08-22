@@ -85,3 +85,6 @@ export type { FeeStatus } from './FeeStatusBadge';
 
 export { StudentTile } from './StudentTile';
 export type { StudentTileProps } from './StudentTile';
+
+export { Brand } from './Brand';
+export type { BrandProps } from './Brand';

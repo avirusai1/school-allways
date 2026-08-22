@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { Button, Select } from '@saw/ui';
+import { applyTenantBrand, Brand, Button, Select } from '@saw/ui';
 import { useAuth } from '../lib/auth';
 import { groupNav, navForManifest } from '../nav/registry';
 import { StayConnectedBanner } from '../features/subscriptions/StayConnectedBanner';
@@ -8,6 +8,14 @@ import { StayConnectedBanner } from '../features/subscriptions/StayConnectedBann
 export function AppShell() {
   const { session, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+
+  // White-label: regenerate the whole blue ramp from the tenant's chosen
+  // color. Restores the platform default on unmount, so the NEXT login
+  // (a different school, or logged out entirely) never inherits it.
+  useEffect(() => {
+    applyTenantBrand(session?.tenant.primaryColor);
+    return () => applyTenantBrand(null);
+  }, [session?.tenant.primaryColor]);
 
   const groups = useMemo(
     () => groupNav(navForManifest(session?.navManifest ?? [], session?.permissions ?? [])),
@@ -24,8 +32,8 @@ export function AppShell() {
       >
         <div className="flex h-14 items-center gap-2 border-b border-grey-100 px-3">
           {!collapsed && (
-            <Link to="/" className="truncate text-[15px] font-semibold text-blue-700">
-              School All Ways
+            <Link to="/" className="min-w-0 truncate">
+              <Brand logoUrl={session?.tenant.logoUrl} name={session?.tenant.name} />
             </Link>
           )}
           <button
