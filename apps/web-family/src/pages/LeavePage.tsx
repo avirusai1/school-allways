@@ -60,7 +60,7 @@ export function LeavePage() {
           <EmptyState headline="No leave applications" body="When you apply, they will list here." />
         )}
         {q.isSuccess && rows.length > 0 && (
-          <div className="overflow-hidden rounded-md border border-grey-200 bg-grey-0">
+          <div className="overflow-hidden rounded-md bg-surface-container-low">
             {rows.map((r) => (
               <ListRow
                 key={r.id}

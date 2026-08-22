@@ -59,7 +59,7 @@ export function ResultsPage() {
           />
         )}
         {q.isSuccess && rows.length > 0 && (
-          <div className="overflow-hidden rounded-md border border-grey-200 bg-grey-0">
+          <div className="overflow-hidden rounded-md bg-surface-container-low">
             {rows.map((r) => {
               const marks =
                 r.obtainedMarks != null && r.totalMarks != null

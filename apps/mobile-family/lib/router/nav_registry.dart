@@ -15,6 +15,12 @@ class NavItem {
 /// Unknown keys from a newer server are SKIPPED SILENTLY.
 const navRegistry = <String, NavItem>{
   'family_home': NavItem(Routes.home, 'Home', PhosphorIconsRegular.house),
+  // The `student` role's homeScreen. Absent from this registry it was dropped
+  // silently by resolveNav(), leaving students with no home tab at all.
+  'student_home': NavItem(Routes.home, 'Home', PhosphorIconsRegular.house),
+  // Promised by the student role's nav; shares the books shelf until a
+  // dedicated library screen exists.
+  'library': NavItem(Routes.books, 'Library', PhosphorIconsRegular.bookOpen),
   'attendance':
       NavItem(Routes.attendance, 'Attendance', PhosphorIconsRegular.checkSquare),
   'homework':

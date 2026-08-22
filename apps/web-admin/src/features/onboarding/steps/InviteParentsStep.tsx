@@ -118,7 +118,7 @@ export const InviteParentsStep = forwardRef<InviteStepHandle, Props>(
               Or start with one class — send section by section and go wider once
               you have seen how parents respond.
             </p>
-            <ul className="divide-y divide-grey-200 rounded-md border border-grey-200 bg-grey-0">
+            <ul className="divide-y divide-outline-variant rounded-md bg-surface-container-low">
               {sections.map((s) => (
                 <li
                   key={s.sectionId}

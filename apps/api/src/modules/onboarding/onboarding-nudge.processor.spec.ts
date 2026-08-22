@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// The processor builds a deep link from ADMIN_WEB_URL. It used to fall back to
+// admin.school.techallways.com — a host that has never existed — so this
+// dependency was invisible. It is required now, so the test declares it.
+process.env.ADMIN_WEB_URL = 'https://school.example.com/admin';
+
+
 import { OnboardingNudgeProcessor } from './onboarding-nudge.processor';
 
 describe('OnboardingNudgeProcessor', () => {

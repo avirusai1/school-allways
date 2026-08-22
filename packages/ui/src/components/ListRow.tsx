@@ -31,7 +31,9 @@ export function ListRow({
         className={[
           'flex w-full items-center gap-3 px-4 text-left',
           minH,
-          onClick ? 'hover:bg-grey-50 active:bg-grey-50 cursor-pointer' : 'cursor-default',
+          onClick
+            ? 'hover:bg-surface-container-highest active:bg-surface-container-highest cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500'
+            : 'cursor-default',
         ].join(' ')}
       >
         {leading ? <div className="h-10 w-10 shrink-0">{leading}</div> : null}

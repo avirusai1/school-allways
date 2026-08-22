@@ -176,3 +176,157 @@ describe('FamilyService.updateChildProfile', () => {
     });
   });
 });
+
+describe('FamilyService.selfHome', () => {
+  function build(rows: Record<string, unknown[]>) {
+    let call = 0;
+    // Query order in selfHome(): student, attendance, dueHomework, overdue, notices.
+    const order = ['student', 'attendance', 'homework', 'overdue', 'notices'];
+    const chain = () => {
+      const key = order[call++] ?? 'notices';
+      const c: Record<string, unknown> = {};
+      const self = () => c;
+      c.from = self;
+      c.innerJoin = self;
+      c.leftJoin = self;
+      c.where = self;
+      c.orderBy = self;
+      c.limit = () => Promise.resolve(rows[key] ?? []);
+      Object.assign(c, {
+        then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) =>
+          Promise.resolve(rows[key] ?? []).then(res, rej),
+      });
+      return c;
+    };
+    const db = {
+      run: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select: () => chain() }),
+      ),
+    };
+    return new FamilyService(
+      db as never,
+      { outstandingPaiseForStudent: vi.fn() } as never,
+      {} as never,
+      { writeBuffer: vi.fn() } as never,
+      subscriptions as never,
+      config as never,
+    );
+  }
+
+  const grant: GrantedPermission = {
+    code: 'student.self.read',
+    scope: 'self',
+    sectionIds: [],
+    subjectIds: [],
+    studentIds: ['stu-1'],
+  };
+
+  it('returns the student their own feed without any fee figure', async () => {
+    const svc = build({
+      student: [
+        {
+          id: 'stu-1',
+          firstName: 'Aadhya',
+          lastName: 'Shetty',
+          photoPath: null,
+          className: '5',
+          sectionName: 'A',
+          rollNo: '12',
+        },
+      ],
+      attendance: [{ status: 'present', inTime: '08:41' }],
+      homework: [],
+      overdue: [],
+      notices: [],
+    });
+
+    const res = await svc.selfHome(grant);
+    expect(res.student.id).toBe('stu-1');
+    expect(res.student.classLabel).toBe('5-A');
+    // A student holds !fee.invoice.read — the feed must never carry a real figure.
+    expect(res.today.feesDuePaise).toBe(0);
+    expect(res).not.toHaveProperty('bus');
+  });
+
+  it('refuses an account with no linked student record', async () => {
+    const svc = build({});
+    await expect(
+      svc.selfHome({ ...grant, studentIds: [] }),
+    ).rejects.toThrow(/not linked to a student/i);
+  });
+});
+
+describe('FamilyService.selfTimetable', () => {
+  const grant: GrantedPermission = {
+    code: 'timetable.read',
+    scope: 'self',
+    sectionIds: [],
+    subjectIds: [],
+    studentIds: ['stu-1'],
+  };
+
+  function build(enrollment: unknown[], slots: unknown[]) {
+    let call = 0;
+    const chain = () => {
+      const rows = call++ === 0 ? enrollment : slots;
+      const c: Record<string, unknown> = {};
+      const self = () => c;
+      c.from = self;
+      c.innerJoin = self;
+      c.leftJoin = self;
+      c.where = self;
+      c.limit = () => Promise.resolve(rows);
+      c.orderBy = () => Promise.resolve(rows);
+      return c;
+    };
+    const db = {
+      run: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select: () => chain() }),
+      ),
+    };
+    return new FamilyService(
+      db as never,
+      {} as never,
+      {} as never,
+      { writeBuffer: vi.fn() } as never,
+      subscriptions as never,
+      config as never,
+    );
+  }
+
+  it('returns the slots for the student own section', async () => {
+    const svc = build(
+      [{ sectionId: 'sec-1' }],
+      [
+        {
+          id: 'slot-1',
+          weekday: 1,
+          roomNo: '204',
+          subjectName: 'Mathematics',
+          periodName: 'P1',
+          sequence: 1,
+          startTime: '08:00:00',
+          endTime: '08:45:00',
+          isBreak: false,
+        },
+      ],
+    );
+    const res = await svc.selfTimetable(grant);
+    expect(res.sectionId).toBe('sec-1');
+    expect(res.data).toHaveLength(1);
+    expect(res.data[0]!.subjectName).toBe('Mathematics');
+  });
+
+  it('returns empty rather than throwing when the student has no enrollment', async () => {
+    const svc = build([], []);
+    const res = await svc.selfTimetable(grant);
+    expect(res).toEqual({ data: [], sectionId: null });
+  });
+
+  it('refuses an account with no linked student record', async () => {
+    const svc = build([], []);
+    await expect(
+      svc.selfTimetable({ ...grant, studentIds: [] }),
+    ).rejects.toThrow(/not linked to a student/i);
+  });
+});

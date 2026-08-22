@@ -58,7 +58,7 @@ export function BooksPage() {
           <EmptyState headline="No books assigned" body="Digital books from school show up here." />
         )}
         {q.isSuccess && rows.length > 0 && (
-          <div className="overflow-hidden rounded-md border border-grey-200 bg-grey-0">
+          <div className="overflow-hidden rounded-md bg-surface-container-low">
             {rows.map((b) => (
               <ListRow
                 key={b.id}

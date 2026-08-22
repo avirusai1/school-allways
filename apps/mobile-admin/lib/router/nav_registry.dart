@@ -30,6 +30,32 @@ const adminNavRegistry = <String, NavItem>{
       NavItem(AdminRoutes.driverHome, 'Route', PhosphorIconsRegular.bus),
   'gate_scanner':
       NavItem(AdminRoutes.gateScanner, 'Gate', PhosphorIconsRegular.qrCode),
+  // Home screens declared by a role but not yet built on mobile. Registered so
+  // resolveAdminNav() stops discarding them — an unregistered homeScreen left
+  // these roles with no home tab and silently fell back to the teacher view.
+  'admissions_funnel':
+      NavItem(AdminRoutes.home, 'Admissions', PhosphorIconsRegular.userPlus),
+  'exam_dashboard':
+      NavItem(AdminRoutes.home, 'Exams', PhosphorIconsRegular.exam),
+  'group_dashboard':
+      NavItem(AdminRoutes.home, 'Group', PhosphorIconsRegular.buildings),
+  'hr_dashboard':
+      NavItem(AdminRoutes.home, 'HR', PhosphorIconsRegular.identificationCard),
+  'lab_home': NavItem(AdminRoutes.home, 'Lab', PhosphorIconsRegular.flask),
+  'library_desk':
+      NavItem(AdminRoutes.home, 'Library', PhosphorIconsRegular.bookOpen),
+  'compliance_centre':
+      NavItem(AdminRoutes.home, 'Compliance', PhosphorIconsRegular.shieldCheck),
+  'payroll': NavItem(AdminRoutes.home, 'Payroll', PhosphorIconsRegular.currencyInr),
+  'infirmary':
+      NavItem(AdminRoutes.home, 'Infirmary', PhosphorIconsRegular.firstAid),
+  'security_dashboard':
+      NavItem(AdminRoutes.home, 'Security', PhosphorIconsRegular.shieldCheck),
+  'counsellor_home':
+      NavItem(AdminRoutes.home, 'Caseload', PhosphorIconsRegular.heart),
+  'store_home': NavItem(AdminRoutes.home, 'Store', PhosphorIconsRegular.package),
+  'transport_dashboard':
+      NavItem(AdminRoutes.home, 'Transport', PhosphorIconsRegular.bus),
   'take_attendance': NavItem(
     AdminRoutes.attendance,
     'Attendance',

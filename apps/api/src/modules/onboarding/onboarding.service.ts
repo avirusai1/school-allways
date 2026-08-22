@@ -63,10 +63,23 @@ const PROGRESS_KEY = 'onboarding.progress';
  * live.
  */
 function joinBaseFor(purpose: 'parent_profile' | 'staff_invite' | 'student_invite'): string {
-  const family =
-    process.env.FAMILY_WEB_URL ?? 'https://family.school.techallways.com';
-  const admin = process.env.ADMIN_WEB_URL ?? 'https://admin.school.techallways.com';
-  return `${(purpose === 'staff_invite' ? admin : family).replace(/\/+$/, '')}/join`;
+  /**
+   * No default. The previous fallbacks — family./admin.school.techallways.com —
+   * are subdomains that have never existed in the nginx config (everything is
+   * path-routed on one host), so an unset variable silently produced an invite
+   * link to a dead server that nobody could report as broken. Failing here is
+   * loud; a dead link in someone's inbox is not.
+   */
+  const key = purpose === 'staff_invite' ? 'ADMIN_WEB_URL' : 'FAMILY_WEB_URL';
+  const base = process.env[key]?.replace(/\/+$/, '');
+  if (!base) {
+    throw new ApiException(
+      500,
+      'CONFIG_MISSING',
+      `${key} is not set — an invite link cannot be built.`,
+    );
+  }
+  return `${base}/join`;
 }
 
 @Injectable()

@@ -179,9 +179,9 @@ export function HomePage() {
       {home.isSuccess && home.data && (
         <div className="mt-6 space-y-3">
           {/* 1. Today strip — attendance always visible, even when locked */}
-          <section className="overflow-hidden rounded-md border border-grey-200 bg-grey-0 p-4">
+          <section className="overflow-hidden rounded-md bg-surface-container-low p-4">
             <p className="text-overline text-grey-500">TODAY, {home.data.today.label}</p>
-            <div className="mt-3 grid grid-cols-3 divide-x divide-grey-200">
+            <div className="mt-3 grid grid-cols-3 divide-x divide-outline-variant">
               <StatTile
                 className="rounded-none border-0 bg-transparent p-2 shadow-none"
                 value={home.data.today.attendance.label}
@@ -257,7 +257,7 @@ export function HomePage() {
 
           {/* 3. Needs attention */}
           {home.data.needsAttention.length > 0 ? (
-            <section className="overflow-hidden rounded-md border border-grey-200 bg-grey-0">
+            <section className="overflow-hidden rounded-md bg-surface-container-low">
               <h2 className="border-b border-grey-100 px-4 py-2 text-label text-grey-700">
                 Needs attention
               </h2>
@@ -288,11 +288,11 @@ export function HomePage() {
               </Link>
             </div>
             {home.data.homeworkDue.length === 0 ? (
-              <p className="rounded-md border border-grey-200 bg-grey-0 px-4 py-3 text-body-small text-grey-500">
+              <p className="rounded-md bg-surface-container-low px-4 py-3 text-body-small text-grey-500">
                 Nothing due right now.
               </p>
             ) : (
-              <div className="overflow-hidden rounded-md border border-grey-200 bg-grey-0">
+              <div className="overflow-hidden rounded-md bg-surface-container-low">
                 {home.data.homeworkDue.map((h) => (
                   <ListRow
                     key={h.id}
@@ -319,11 +319,11 @@ export function HomePage() {
           <section>
             <h2 className="mb-2 text-label text-grey-700">Recent notices</h2>
             {home.data.notices.length === 0 ? (
-              <p className="rounded-md border border-grey-200 bg-grey-0 px-4 py-3 text-body-small text-grey-500">
+              <p className="rounded-md bg-surface-container-low px-4 py-3 text-body-small text-grey-500">
                 No notices right now.
               </p>
             ) : (
-              <div className="overflow-hidden rounded-md border border-grey-200 bg-grey-0">
+              <div className="overflow-hidden rounded-md bg-surface-container-low">
                 {home.data.notices.slice(0, 3).map((n) => (
                   <ListRow
                     key={n.id}

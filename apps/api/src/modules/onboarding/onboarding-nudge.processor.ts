@@ -9,8 +9,24 @@ import { NotificationService } from '../notifications/notification.service';
 import { ONBOARDING_STEPS } from './onboarding.constants';
 
 type NudgeDay = 1 | 3 | 7;
-const JOIN_BASE =
-  process.env.ADMIN_APP_URL ?? 'https://admin.school.techallways.com';
+
+/**
+ * ADMIN_APP_URL was never a real variable — it is set nowhere in this repo, in
+ * CI, or on the server, so this always fell through to
+ * admin.school.techallways.com, a subdomain nginx has never served. Every nudge
+ * sent since launch carried a dead link. ADMIN_WEB_URL is the configured one,
+ * and it is validated as required in production.
+ *
+ * Read at call time, not module load: a module-level process.env read can
+ * evaluate before ConfigModule has loaded the env file.
+ */
+function joinBase(): string {
+  const base = process.env.ADMIN_WEB_URL?.replace(/\/+$/, '');
+  if (!base) {
+    throw new Error('ADMIN_WEB_URL is not set — an onboarding nudge has nowhere to link to.');
+  }
+  return base;
+}
 
 /**
  * Scheduled job (07:00 IST): find tenants stalled > 24h on a wizard step and
@@ -110,7 +126,7 @@ export class OnboardingNudgeProcessor {
             variables: {
               schoolName: t.name,
               step,
-              link: `${JOIN_BASE}/onboarding?step=${step}`,
+              link: `${joinBase()}/onboarding?step=${step}`,
             },
             priority: 'high',
             channels: ['push', 'in_app'],

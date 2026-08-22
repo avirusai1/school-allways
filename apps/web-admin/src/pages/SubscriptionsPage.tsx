@@ -182,7 +182,7 @@ export function SubscriptionsPage() {
       {rows.length === 0 ? (
         <EmptyState headline="No students" body="No students match these filters." />
       ) : (
-        <div className="overflow-hidden rounded-md border border-grey-200 bg-grey-0">
+        <div className="overflow-hidden rounded-md bg-surface-container-low">
           {rows.map((row) => (
             <label
               key={row.id}

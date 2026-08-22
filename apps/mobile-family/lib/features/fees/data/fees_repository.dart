@@ -4,7 +4,6 @@ import 'dart:math';
 import 'package:core_network/core_network.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../core/paywall.dart';
 import '../domain/fees_model.dart';
 
 class FeesRepository {
@@ -40,7 +39,9 @@ class FeesRepository {
       await _cache(studentId, data);
       return data;
     } catch (e) {
-      if (isSubscriptionRequired(e)) rethrow;
+      // isRefusal covers SUBSCRIPTION_REQUIRED and also 401/403 — a permission
+      // failure must not be served as a cached or zeroed fee overview.
+      if (isRefusal(e)) rethrow;
       final cached = await getCached(studentId);
       if (cached != null) return cached;
       await _cache(studentId, empty);

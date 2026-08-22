@@ -157,7 +157,7 @@ export function DiaryPage() {
         {ready && homeworkRows.length > 0 && (
           <section className={diaryRows.length > 0 ? 'mb-8' : undefined}>
             <h2 className="text-label text-grey-700">Homework</h2>
-            <div className="mt-2 overflow-hidden rounded-md border border-grey-200 bg-grey-0">
+            <div className="mt-2 overflow-hidden rounded-md bg-surface-container-low">
               {homeworkRows.map((row) => {
                 const overdue =
                   row.dueOn &&
@@ -193,7 +193,7 @@ export function DiaryPage() {
                   <div className="mb-1 text-overline uppercase tracking-wide text-grey-500">
                     {formatDay(day)}
                   </div>
-                  <div className="overflow-hidden rounded-md border border-grey-200 bg-grey-0">
+                  <div className="overflow-hidden rounded-md bg-surface-container-low">
                     {rows.map((row) => (
                       <ListRow
                         key={row.id}

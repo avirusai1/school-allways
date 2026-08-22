@@ -89,7 +89,7 @@ export function FleetPage() {
             />
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2 rounded-md border border-grey-200 bg-grey-0 p-4">
+          <div className="mt-4 flex flex-wrap gap-2 rounded-md bg-surface-container-low p-4">
             {bands.map(([band, count]) => (
               <Chip key={band} label={`${band}: ${count}`} />
             ))}
@@ -102,7 +102,7 @@ export function FleetPage() {
         </>
       )}
 
-      <div className="mt-6 rounded-md border border-grey-200 bg-grey-0 p-3">
+      <div className="mt-6 rounded-md bg-surface-container-low p-3">
         <div className="mb-2 text-caption text-grey-500" title={series.data?.definition}>
           Schools active per day · last 30 days
         </div>
@@ -143,7 +143,7 @@ export function FleetPage() {
 
       <section className="mt-8">
         <h2 className="text-label text-grey-700">At-risk schools</h2>
-        <div className="mt-2 overflow-hidden rounded-md border border-grey-200 bg-grey-0">
+        <div className="mt-2 overflow-hidden rounded-md bg-surface-container-low">
           {alerts.isPending && <Skeleton height={80} className="m-4 w-auto" />}
           {alerts.isSuccess && alertRows.length === 0 && (
             <p className="p-4 text-body-small text-grey-500">No school is at risk today.</p>

@@ -45,17 +45,36 @@ export const NAV_REGISTRY: NavItem[] = [
   { id: 'settings', label: 'Settings', path: '/settings', section: 'Settings' },
 ];
 
-export function navForManifest(manifest: string[]): NavItem[] {
-  if (manifest.length === 0) {
-    // Empty manifest = show dashboard only (never "everything").
-    return NAV_REGISTRY.filter((n) => n.id === 'dashboard');
-  }
-  const set = new Set(manifest);
-  // Always include dashboard when any nav is present.
-  const items = NAV_REGISTRY.filter(
-    (n) => n.id === 'dashboard' || set.has(n.id) || [...set].some((m) => n.id.startsWith(`${m}.`) || m.startsWith(`${n.id}.`)),
+/**
+ * @param permissions the session's permission codes. Dashboard is only offered
+ *   to roles that can actually read it: it was previously injected into every
+ *   sidebar unconditionally, so 22 of the 26 admin roles were shown a
+ *   "Dashboard" link whose only possible outcome was a permission error.
+ */
+export function navForManifest(
+  manifest: string[],
+  permissions: string[] = [],
+): NavItem[] {
+  const canSeeDashboard = permissions.includes('dashboard.principal.read');
+  const dashboard = NAV_REGISTRY.filter(
+    (n) => n.id === 'dashboard' && canSeeDashboard,
   );
-  return items.length > 0 ? items : NAV_REGISTRY.filter((n) => n.id === 'dashboard');
+
+  if (manifest.length === 0) {
+    // Empty manifest = dashboard only if permitted, never "everything".
+    return dashboard;
+  }
+
+  const set = new Set(manifest);
+  return NAV_REGISTRY.filter(
+    (n) =>
+      (n.id === 'dashboard' && canSeeDashboard) ||
+      (n.id !== 'dashboard' &&
+        (set.has(n.id) ||
+          [...set].some(
+            (m) => n.id.startsWith(`${m}.`) || m.startsWith(`${n.id}.`),
+          ))),
+  );
 }
 
 export function groupNav(items: NavItem[]): { section: string; items: NavItem[] }[] {

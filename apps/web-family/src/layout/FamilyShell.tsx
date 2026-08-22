@@ -1,21 +1,23 @@
+import { useMemo } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Button } from '@saw/ui';
+import { familyNavFor } from '../nav/registry';
 import { useAuth } from '../lib/auth';
-
-const NAV = [
-  { to: '/', label: 'Home', end: true },
-  { to: '/fees', label: 'Fees' },
-  { to: '/results', label: 'Results' },
-  { to: '/diary', label: 'Diary' },
-  { to: '/leave', label: 'Leave' },
-  { to: '/books', label: 'Books' },
-  { to: '/bus', label: 'Bus' },
-  { to: '/notifications', label: 'Alerts' },
-  { to: '/privacy', label: 'Privacy' },
-];
 
 export function FamilyShell() {
   const { session, logout } = useAuth();
+
+  // Server-driven, per roles.ts: "Never hardcode role→screen mapping in the
+  // app, or every permission tweak becomes a Play Store release."
+  const NAV = useMemo(
+    () =>
+      familyNavFor(session?.navManifest ?? [], session?.permissions ?? []).map((n) => ({
+        to: n.path,
+        label: n.label,
+        end: n.end,
+      })),
+    [session?.navManifest, session?.permissions],
+  );
 
   return (
     <div className="flex min-h-screen flex-col bg-grey-25 md:flex-row">

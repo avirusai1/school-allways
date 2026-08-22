@@ -156,7 +156,7 @@ export function StaffAttendanceMarker({
                 {group.name}
               </p>
             ) : null}
-            <ul className="divide-y divide-grey-200 rounded-md border border-grey-200 bg-grey-0">
+            <ul className="divide-y divide-outline-variant rounded-md bg-surface-container-low">
               {group.rows.map((r) => (
                 <li
                   key={r.staffId}

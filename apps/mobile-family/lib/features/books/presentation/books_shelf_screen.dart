@@ -76,9 +76,8 @@ class _BookTile extends StatelessWidget {
         Expanded(
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: t.surfaceAlt,
+              color: t.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(color: t.border),
             ),
             child: Icon(
               PhosphorIconsRegular.book,

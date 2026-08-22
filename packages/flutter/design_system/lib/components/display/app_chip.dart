@@ -27,7 +27,7 @@ class AppChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = context.tokens;
     final (Color bg, Color fg) = switch (tone) {
-      AppChipTone.neutral => (t.surfaceAlt, t.textSecondary),
+      AppChipTone.neutral => (t.surfaceContainerHighest, t.textSecondary),
       AppChipTone.success => (t.successBg, t.successText),
       AppChipTone.danger => (t.dangerBg, t.dangerText),
       AppChipTone.warning => (t.warningBg, t.warningText),

@@ -5,6 +5,13 @@ import '../tokens/colors.dart';
 /// Semantic tokens Material's ThemeData doesn't model.
 ///
 /// Feature widgets read THIS (via Theme.of), never [AppColors] directly.
+///
+/// M3 fields (added for the Material 3 revamp): surface/text/outline roles are
+/// now sourced from a real HCT [ColorScheme] built by [AppTheme.build] via
+/// `ColorScheme.fromSeed` — Flutter's own Material Color Utilities engine —
+/// rather than the static grey ramp. Semantic colours (success/danger/warning/
+/// info) and attendance colours stay on the fixed [AppColors] palette; they are
+/// deliberately never re-themed regardless of a school's white-label primary.
 @immutable
 class AppThemeExtension extends ThemeExtension<AppThemeExtension> {
   const AppThemeExtension({
@@ -43,29 +50,58 @@ class AppThemeExtension extends ThemeExtension<AppThemeExtension> {
     required this.attendanceLeave,
     required this.attendanceHoliday,
     required this.focusRing,
+    // —— M3 additions ——
+    required this.onPrimary,
+    required this.primaryContainer,
+    required this.onPrimaryContainer,
+    required this.onAccent,
+    required this.accentContainer,
+    required this.onAccentContainer,
+    required this.tertiary,
+    required this.onTertiary,
+    required this.tertiaryContainer,
+    required this.onTertiaryContainer,
+    required this.surfaceContainerLowest,
+    required this.surfaceContainerLow,
+    required this.surfaceContainer,
+    required this.surfaceContainerHigh,
+    required this.surfaceContainerHighest,
+    required this.outline,
+    required this.outlineVariant,
+    required this.stateLayerHover,
+    required this.stateLayerFocus,
+    required this.stateLayerPress,
   });
 
   /// Factory from the school primary (white-label). Amber/neutrals/semantics
   /// never change; only the blue ramp is overridden by [primaryColor].
-  factory AppThemeExtension.fromPrimary(Color? primaryColor) {
-    final primary = primaryColor ?? AppColors.blue500;
+  ///
+  /// [scheme] is the real M3 ColorScheme built by [AppTheme.build] (HCT via
+  /// `ColorScheme.fromSeed`) — passed in rather than rebuilt here so the two
+  /// stay in lockstep with exactly one seed computation.
+  factory AppThemeExtension.fromScheme(
+    ColorScheme scheme,
+    ColorScheme accentScheme,
+    ColorScheme tertiaryScheme,
+  ) {
+    final primary = scheme.primary;
     return AppThemeExtension(
       primary: primary,
-      accent: AppColors.amber500,
-      textPrimary: AppColors.grey900,
-      textSecondary: AppColors.grey700,
+      accent: accentScheme.primary,
+      textPrimary: scheme.onSurface,
+      textSecondary: scheme.onSurfaceVariant,
       textTertiary: AppColors.grey500,
-      textOnPrimary: AppColors.grey0,
-      textOnAccent: AppColors.grey900,
-      appBackground: AppColors.grey25,
-      surface: AppColors.grey0,
-      surfaceAlt: AppColors.grey50,
-      border: AppColors.grey200,
-      borderStrong: AppColors.grey300,
+      textOnPrimary: scheme.onPrimary,
+      textOnAccent: accentScheme.onPrimary,
+      appBackground: scheme.surfaceContainerLowest,
+      surface: scheme.surface,
+      surfaceAlt: scheme.surfaceContainerLow,
+      border: scheme.outlineVariant,
+      borderStrong: scheme.outline,
       placeholder: AppColors.grey400,
-      disabledFill: AppColors.grey100,
+      disabledFill: scheme.surfaceContainerHighest,
       disabledText: AppColors.grey400,
-      pressedOverlay: AppColors.grey50,
+      pressedOverlay: scheme.surfaceContainer,
       success: AppColors.green500,
       successBg: AppColors.green50,
       successText: AppColors.green700,
@@ -85,6 +121,29 @@ class AppThemeExtension extends ThemeExtension<AppThemeExtension> {
       attendanceLeave: AppColors.attendanceLeave,
       attendanceHoliday: AppColors.attendanceHoliday,
       focusRing: primary,
+      onPrimary: scheme.onPrimary,
+      primaryContainer: scheme.primaryContainer,
+      onPrimaryContainer: scheme.onPrimaryContainer,
+      onAccent: accentScheme.onPrimary,
+      accentContainer: accentScheme.primaryContainer,
+      onAccentContainer: accentScheme.onPrimaryContainer,
+      tertiary: tertiaryScheme.primary,
+      onTertiary: tertiaryScheme.onPrimary,
+      tertiaryContainer: tertiaryScheme.primaryContainer,
+      onTertiaryContainer: tertiaryScheme.onPrimaryContainer,
+      surfaceContainerLowest: scheme.surfaceContainerLowest,
+      surfaceContainerLow: scheme.surfaceContainerLow,
+      surfaceContainer: scheme.surfaceContainer,
+      surfaceContainerHigh: scheme.surfaceContainerHigh,
+      surfaceContainerHighest: scheme.surfaceContainerHighest,
+      outline: scheme.outline,
+      outlineVariant: scheme.outlineVariant,
+      // M3 canonical state-layer opacities (Material spec: hover 8%,
+      // focus 10%, pressed 10–12% — we use 10% for pressed, splitting the
+      // difference since we don't model drag separately).
+      stateLayerHover: primary.withValues(alpha: 0.08),
+      stateLayerFocus: primary.withValues(alpha: 0.10),
+      stateLayerPress: primary.withValues(alpha: 0.10),
     );
   }
 
@@ -123,6 +182,28 @@ class AppThemeExtension extends ThemeExtension<AppThemeExtension> {
   final Color attendanceLeave;
   final Color attendanceHoliday;
   final Color focusRing;
+
+  // —— M3 additions ——
+  final Color onPrimary;
+  final Color primaryContainer;
+  final Color onPrimaryContainer;
+  final Color onAccent;
+  final Color accentContainer;
+  final Color onAccentContainer;
+  final Color tertiary;
+  final Color onTertiary;
+  final Color tertiaryContainer;
+  final Color onTertiaryContainer;
+  final Color surfaceContainerLowest;
+  final Color surfaceContainerLow;
+  final Color surfaceContainer;
+  final Color surfaceContainerHigh;
+  final Color surfaceContainerHighest;
+  final Color outline;
+  final Color outlineVariant;
+  final Color stateLayerHover;
+  final Color stateLayerFocus;
+  final Color stateLayerPress;
 
   static AppThemeExtension of(BuildContext context) {
     return Theme.of(context).extension<AppThemeExtension>()!;
@@ -165,6 +246,26 @@ class AppThemeExtension extends ThemeExtension<AppThemeExtension> {
     Color? attendanceLeave,
     Color? attendanceHoliday,
     Color? focusRing,
+    Color? onPrimary,
+    Color? primaryContainer,
+    Color? onPrimaryContainer,
+    Color? onAccent,
+    Color? accentContainer,
+    Color? onAccentContainer,
+    Color? tertiary,
+    Color? onTertiary,
+    Color? tertiaryContainer,
+    Color? onTertiaryContainer,
+    Color? surfaceContainerLowest,
+    Color? surfaceContainerLow,
+    Color? surfaceContainer,
+    Color? surfaceContainerHigh,
+    Color? surfaceContainerHighest,
+    Color? outline,
+    Color? outlineVariant,
+    Color? stateLayerHover,
+    Color? stateLayerFocus,
+    Color? stateLayerPress,
   }) {
     return AppThemeExtension(
       primary: primary ?? this.primary,
@@ -202,6 +303,28 @@ class AppThemeExtension extends ThemeExtension<AppThemeExtension> {
       attendanceLeave: attendanceLeave ?? this.attendanceLeave,
       attendanceHoliday: attendanceHoliday ?? this.attendanceHoliday,
       focusRing: focusRing ?? this.focusRing,
+      onPrimary: onPrimary ?? this.onPrimary,
+      primaryContainer: primaryContainer ?? this.primaryContainer,
+      onPrimaryContainer: onPrimaryContainer ?? this.onPrimaryContainer,
+      onAccent: onAccent ?? this.onAccent,
+      accentContainer: accentContainer ?? this.accentContainer,
+      onAccentContainer: onAccentContainer ?? this.onAccentContainer,
+      tertiary: tertiary ?? this.tertiary,
+      onTertiary: onTertiary ?? this.onTertiary,
+      tertiaryContainer: tertiaryContainer ?? this.tertiaryContainer,
+      onTertiaryContainer: onTertiaryContainer ?? this.onTertiaryContainer,
+      surfaceContainerLowest:
+          surfaceContainerLowest ?? this.surfaceContainerLowest,
+      surfaceContainerLow: surfaceContainerLow ?? this.surfaceContainerLow,
+      surfaceContainer: surfaceContainer ?? this.surfaceContainer,
+      surfaceContainerHigh: surfaceContainerHigh ?? this.surfaceContainerHigh,
+      surfaceContainerHighest:
+          surfaceContainerHighest ?? this.surfaceContainerHighest,
+      outline: outline ?? this.outline,
+      outlineVariant: outlineVariant ?? this.outlineVariant,
+      stateLayerHover: stateLayerHover ?? this.stateLayerHover,
+      stateLayerFocus: stateLayerFocus ?? this.stateLayerFocus,
+      stateLayerPress: stateLayerPress ?? this.stateLayerPress,
     );
   }
 
@@ -245,6 +368,29 @@ class AppThemeExtension extends ThemeExtension<AppThemeExtension> {
       attendanceLeave: l(attendanceLeave, other.attendanceLeave),
       attendanceHoliday: l(attendanceHoliday, other.attendanceHoliday),
       focusRing: l(focusRing, other.focusRing),
+      onPrimary: l(onPrimary, other.onPrimary),
+      primaryContainer: l(primaryContainer, other.primaryContainer),
+      onPrimaryContainer: l(onPrimaryContainer, other.onPrimaryContainer),
+      onAccent: l(onAccent, other.onAccent),
+      accentContainer: l(accentContainer, other.accentContainer),
+      onAccentContainer: l(onAccentContainer, other.onAccentContainer),
+      tertiary: l(tertiary, other.tertiary),
+      onTertiary: l(onTertiary, other.onTertiary),
+      tertiaryContainer: l(tertiaryContainer, other.tertiaryContainer),
+      onTertiaryContainer: l(onTertiaryContainer, other.onTertiaryContainer),
+      surfaceContainerLowest:
+          l(surfaceContainerLowest, other.surfaceContainerLowest),
+      surfaceContainerLow: l(surfaceContainerLow, other.surfaceContainerLow),
+      surfaceContainer: l(surfaceContainer, other.surfaceContainer),
+      surfaceContainerHigh:
+          l(surfaceContainerHigh, other.surfaceContainerHigh),
+      surfaceContainerHighest:
+          l(surfaceContainerHighest, other.surfaceContainerHighest),
+      outline: l(outline, other.outline),
+      outlineVariant: l(outlineVariant, other.outlineVariant),
+      stateLayerHover: l(stateLayerHover, other.stateLayerHover),
+      stateLayerFocus: l(stateLayerFocus, other.stateLayerFocus),
+      stateLayerPress: l(stateLayerPress, other.stateLayerPress),
     );
   }
 }

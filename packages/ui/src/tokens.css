@@ -1,61 +1,103 @@
 /**
- * School All Ways design tokens — identical to Flutter AppColors / AppSpacing.
+ * School All Ways design tokens — Material 3.
+ *
+ * The numbered ramps (blue-50..900 etc.) are UNCHANGED in name and kept at
+ * their original perceived lightness, but each value is now generated with
+ * OKLCH — a perceptually-uniform color space chosen for the same reason M3's
+ * own HCT space exists — from a single seed per hue, so hue and chroma taper
+ * are consistent across every stop instead of hand-picked per swatch. The
+ * brand anchors (blue-500, amber-500, and the 500 of every semantic hue)
+ * are kept EXACTLY as they were; nothing about the brand's recognizable
+ * colors moved.
+ *
+ * The unnumbered role tokens (--color-primary-container, --color-outline,
+ * --color-surface-container-*, etc.) are new: the M3 container/surface/
+ * outline roles this system never had a name for. These are what give a
+ * card, a chip, or a filled button its M3-correct tonal relationship to the
+ * page instead of a flat white box with a hairline border.
+ *
  * Space-separated RGB for Tailwind opacity modifiers.
  * A school overrides --color-primary-500 at runtime for white-label.
  */
 :root {
   /* Brand blue */
-  --color-blue-50: 241 246 251;
-  --color-blue-100: 220 232 244;
-  --color-blue-200: 180 205 230;
-  --color-blue-300: 127 169 209;
-  --color-blue-400: 74 130 184;
+  --color-blue-50: 212 250 255;
+  --color-blue-100: 194 235 255;
+  --color-blue-200: 161 206 255;
+  --color-blue-300: 118 169 223;
+  --color-blue-400: 72 129 189;
   --color-blue-500: 27 94 156;
-  --color-blue-600: 22 78 130;
-  --color-blue-700: 18 62 104;
-  --color-blue-800: 14 47 79;
-  --color-blue-900: 10 33 56;
+  --color-blue-600: 15 78 133;
+  --color-blue-700: 0 61 112;
+  --color-blue-800: 0 46 92;
+  --color-blue-900: 0 31 73;
 
   /* Accent amber */
-  --color-amber-50: 254 247 236;
-  --color-amber-100: 251 233 204;
-  --color-amber-200: 246 210 147;
-  --color-amber-300: 242 188 95;
-  --color-amber-400: 239 170 60;
+  --color-amber-50: 255 239 187;
+  --color-amber-100: 255 226 171;
+  --color-amber-200: 255 205 145;
+  --color-amber-300: 242 186 122;
+  --color-amber-400: 230 173 105;
   --color-amber-500: 217 141 27;
-  --color-amber-600: 181 113 19;
-  --color-amber-700: 143 87 14;
+  --color-amber-600: 180 114 0;
+  --color-amber-700: 153 82 0;
 
-  /* Neutral grey — grey/600 is solid #526273 (spec typo had alpha) */
-  --color-grey-0: 255 255 255;
-  --color-grey-25: 250 251 252;
-  --color-grey-50: 244 246 248;
-  --color-grey-100: 234 238 242;
-  --color-grey-200: 218 224 230;
-  --color-grey-300: 191 200 210;
-  --color-grey-400: 148 162 177;
-  --color-grey-500: 107 123 140;
-  --color-grey-600: 82 98 115;
-  --color-grey-700: 61 76 92;
-  --color-grey-800: 38 49 61;
-  --color-grey-900: 22 32 43;
+  /* Neutral grey — regenerated with a faint brand-blue tint, per M3's own neutral-palette convention */
+  --color-grey-0: 253 255 255;
+  --color-grey-25: 248 251 254;
+  --color-grey-50: 243 246 249;
+  --color-grey-100: 235 238 241;
+  --color-grey-200: 220 224 227;
+  --color-grey-300: 196 199 203;
+  --color-grey-400: 157 161 165;
+  --color-grey-500: 118 122 126;
+  --color-grey-600: 93 97 101;
+  --color-grey-700: 71 75 79;
+  --color-grey-800: 45 48 52;
+  --color-grey-900: 29 31 34;
 
   /* Semantic */
-  --color-green-50: 237 247 241;
+  --color-green-50: 213 255 226;
   --color-green-500: 46 125 79;
-  --color-green-700: 31 90 56;
-  --color-red-50: 252 238 236;
+  --color-green-700: 13 92 52;
+  --color-red-50: 255 216 202;
   --color-red-500: 192 57 43;
-  --color-red-700: 142 42 32;
-  --color-orange-50: 253 243 231;
+  --color-red-700: 152 23 13;
+  --color-orange-50: 255 234 186;
   --color-orange-500: 199 119 0;
-  --color-orange-700: 149 79 0;
-  --color-cyan-50: 235 244 250;
+  --color-orange-700: 153 77 0;
+  --color-cyan-50: 208 248 255;
   --color-cyan-500: 42 111 168;
-  --color-cyan-700: 29 80 121;
+  --color-cyan-700: 10 80 130;
 
   /* White-label primary (defaults to blue/500) */
   --color-primary-500: var(--color-blue-500);
+
+  /* —— M3 role tokens (new) —— */
+  --color-primary-container: 185 226 255;
+  --color-on-primary-container: 0 0 28;
+  --color-secondary-container: 255 212 154;
+  --color-on-secondary-container: 20 0 0;
+  --color-tertiary: 5 75 123;
+  --color-on-tertiary: 255 255 255;
+  --color-tertiary-container: 184 227 255;
+  --color-on-tertiary-container: 0 1 26;
+  --color-error-container: 255 194 179;
+  --color-on-error-container: 28 0 0;
+  --color-surface-dim: 209 212 216;
+  --color-surface-bright: 246 249 252;
+  --color-surface-container-lowest: 255 255 255;
+  --color-surface-container-low: 239 242 245;
+  --color-surface-container: 232 235 239;
+  --color-surface-container-high: 226 229 232;
+  --color-surface-container-highest: 219 222 226;
+  --color-on-surface-variant: 42 46 51;
+  --color-outline: 94 100 107;
+  --color-outline-variant: 185 190 196;
+  --color-inverse-surface: 20 22 25;
+  --color-inverse-on-surface: 236 239 242;
+  --color-inverse-primary: 147 194 245;
+  --color-scrim: 0 0 0;
 
   /* Spacing (px) */
   --space-0: 0px;
@@ -70,10 +112,12 @@
   --space-12: 48px;
   --space-16: 64px;
 
-  /* Radius */
-  --radius-sm: 6px;
-  --radius-md: 10px;
+  /* Radius — M3 canonical shape scale */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
   --radius-lg: 16px;
+  --radius-xl: 28px;
   --radius-full: 999px;
 
   /* Motion */
@@ -94,3 +138,4 @@
     --duration-slow: 0ms;
   }
 }
+
